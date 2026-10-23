@@ -39,7 +39,6 @@ export function useAmemberSession() {
   const route = useRoute()
   const { locales } = useI18n()
   const { signOut } = useAuth()
-  const epoch = useSessionEpoch()
 
   const apiUrl = String(config.amemberApiUrl)
   const loginUrl = String(config.amemberLoginUrl)
@@ -158,12 +157,12 @@ export function useAmemberSession() {
 
   // The handoff set the board cookie: read the new session into the page, no
   // reload. Reactive readers of the session (header, board bar, comment box)
-  // follow by themselves; the epoch tells the surfaces with per-viewer state
-  // (votes, likes, subscription) to fetch those fields again. A guest's writes
-  // are claimed by the default layout when hasAccount turns true.
+  // follow by themselves; the auth-reload plugin sees the new user and moves
+  // the session epoch, so the surfaces with per-viewer state (votes, likes,
+  // subscription) fetch those fields again. A guest's writes are claimed by
+  // the default layout when hasAccount turns true.
   async function refreshInPlace() {
     await refreshNuxtData('auth-session')
-    epoch.value++
   }
 
   // After a sign-out (the logout sync, or a switch that could not finish):

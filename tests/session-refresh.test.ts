@@ -59,3 +59,30 @@ test('patchViewerFields: walks the children key (comment replies)', () => {
   patchViewerFields(shown, [{ id: 'p', hasLiked: true, likeCount: 1, children: [{ id: 'c', hasLiked: true, likeCount: 2 }] }], ['hasLiked', 'likeCount'], 'children')
   assert.deepEqual(shown, [{ id: 'p', hasLiked: true, likeCount: 1, children: [{ id: 'c', hasLiked: true, likeCount: 2 }] }])
 })
+
+// ── Fix round 2: every in-page user change re-syncs the per-viewer flags ───
+
+const { sessionChangeAction } = await import('../app/utils/session-refresh')
+
+test('sessionChangeAction: a sign-in on the page (nobody or a guest → account) re-syncs, no reload', () => {
+  assert.equal(sessionChangeAction(null, alice), 'resync')
+  assert.equal(sessionChangeAction(guest, alice), 'resync')
+})
+
+test('sessionChangeAction: one account replaced by another reloads (and needs no re-sync)', () => {
+  assert.equal(sessionChangeAction(alice, bob), 'reload')
+  assert.equal(sessionChangeAction(alice, guest), 'reload')
+})
+
+test('sessionChangeAction: a sign-out on the page re-syncs, so the old flags clear', () => {
+  assert.equal(sessionChangeAction(alice, null), 'resync')
+  assert.equal(sessionChangeAction(guest, null), 'resync')
+})
+
+test('sessionChangeAction: no user change, or a first guest minted for a write, does nothing', () => {
+  assert.equal(sessionChangeAction(alice, { id: 'a', isAnonymous: false }), 'none')
+  assert.equal(sessionChangeAction(null, null), 'none')
+  // The guest is minted in the middle of its first vote; a re-sync then could
+  // race the vote's own answer, and a new guest has no flags to fetch.
+  assert.equal(sessionChangeAction(null, guest), 'none')
+})

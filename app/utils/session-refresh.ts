@@ -21,6 +21,24 @@ export function shouldReloadOnUserChange(prev: UserRef | null | undefined, next:
   return !!next?.id && next.id !== prev.id
 }
 
+export type SessionChangeAction = 'reload' | 'resync' | 'none'
+
+// What the page does when the session's user changes without a navigation
+// (the background SSO handoff, the login dialog, a sign-out in the page):
+// - 'reload' when one real account replaces another (shouldReloadOnUserChange);
+// - 'resync' for any other user change: every surface with per-viewer flags
+//   fetches them again (the session epoch, useSessionRefresh), so the flags of
+//   the visitor before do not stay on screen;
+// - 'none' when the user is the same, and for a first guest: it is minted in
+//   the middle of its first write, a re-sync could race that write's answer,
+//   and a new guest has no flags yet.
+export function sessionChangeAction(prev: UserRef | null | undefined, next: UserRef | null | undefined): SessionChangeAction {
+  if ((prev?.id ?? null) === (next?.id ?? null)) return 'none'
+  if (shouldReloadOnUserChange(prev, next)) return 'reload'
+  if (!prev?.id && next?.isAnonymous) return 'none'
+  return 'resync'
+}
+
 // Copies the named fields from `fresh` onto the matching items of `shown` (by
 // id), in place, and walks `childrenKey` the same way. Items that `fresh` does
 // not hold stay as they are; nothing is added or removed.
