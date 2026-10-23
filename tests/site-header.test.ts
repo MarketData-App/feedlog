@@ -89,6 +89,11 @@ test('siteHeaderHtml uses the board-hosted logo files', () => {
   assert.match(html, /src="\/brand\/logo-on-dark\.webp"/)
 })
 
+test('siteHeaderHtml names the logo "Market Data", not the kit default "MarketData"', () => {
+  assert.equal([...html.matchAll(/alt="Market Data"/g)].length >= 2, true)
+  assert.doesNotMatch(html, /alt="MarketData"/)
+})
+
 test('themeCookieDomain shares the kit cookie across marketdata.app only', () => {
   assert.equal(themeCookieDomain('roadmap-staging.marketdata.app'), '.marketdata.app')
   assert.equal(themeCookieDomain('roadmap.marketdata.app:443'), '.marketdata.app')

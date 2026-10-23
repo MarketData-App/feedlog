@@ -62,7 +62,8 @@ export function siteHeaderHtml(opts: SiteHeaderOptions): string {
     loginUrl: opts.loginUrl,
     signupUrl: opts.signupUrl,
     // The kit's 320px webp files, copied to public/brand/ (2x for the 160px slot).
-    logo: { light: '/brand/logo-on-light.webp', dark: '/brand/logo-on-dark.webp' },
+    // alt: the kit's default is "MarketData"; the company name is two words.
+    logo: { light: '/brand/logo-on-light.webp', dark: '/brand/logo-on-dark.webp', alt: 'Market Data' },
     slots: { auth: ACCOUNT_SLOT },
   })
 }

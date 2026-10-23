@@ -63,15 +63,17 @@ h1, h2, h3, h4, h5, h6,
 }
 
 /*
- * Board bar: the header's colour and the header's bottom line (the kit token
- * --color-default), so the header and the bar read as one block. In light mode
- * both are white already.
+ * Board bar: the header's colour and the header's bottom line, so the header
+ * and the bar read as one block. In light mode both are white already. The kit
+ * draws the header line as 10% of --color-body, a token scoped to .site-header;
+ * the values here are that token per mode (gray-600 light, gray-400 dark).
  */
 .board-bar {
-  border-color: var(--color-default);
+  border-color: color-mix(in oklab, oklch(0.446 0.03 256.802) 10%, transparent);
 }
 .dark .board-bar {
   background-color: var(--background);
+  border-color: color-mix(in oklab, oklch(0.707 0.022 261.325) 10%, transparent);
 }
 
 /* No "Powered by FeedLog" link. */
