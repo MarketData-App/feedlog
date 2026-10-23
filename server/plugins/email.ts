@@ -2,17 +2,12 @@ import { consola } from 'consola'
 
 const logger = consola.withTag('email')
 
-const FROM_DISPLAY_NAME = 'FeedLog'
-const FALLBACK_FROM_ADDRESS = 'onboarding@resend.dev'
-
 export default defineNitroPlugin(() => {
   const resendApiKey = process.env.RESEND_API_KEY
-  const emailFrom = process.env.EMAIL_FROM
 
   // Resend — register when API key is available
   if (resendApiKey) {
-    const fromAddress = emailFrom || FALLBACK_FROM_ADDRESS
-    const from = `${FROM_DISPLAY_NAME} <${fromAddress}>`
+    const from = formatEmailFrom(process.env.EMAIL_FROM)
 
     registerEmailProvider({
       name: 'resend',
