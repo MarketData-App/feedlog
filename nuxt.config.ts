@@ -216,6 +216,8 @@ export default defineNuxtConfig({
       ? {
           'pg-native': resolver.resolve('./server/lib/agent/pg-native-unavailable.cjs'),
           '@vercel/queue': resolver.resolve('./server/lib/inbox/vercel-queue-unavailable.ts'),
+          // unenv's ESM `debug` stub is not callable via require(); see the shim.
+          'debug': resolver.resolve('./server/lib/agent/debug-noop.cjs'),
         }
       : {},
     // Keep CF Workers' native node:fs / path / process available at runtime so

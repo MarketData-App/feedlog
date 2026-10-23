@@ -19,6 +19,19 @@ type = "Text"
 globs = ["**/*.sql", "**/_journal.json"]
 fallthrough = true
 
+# Nitro puts a wasm import (Mastra's xxhash-wasm) in a nested chunk as
+# `../../wasm/<name>.wasm`. find_additional_modules makes wrangler keep that
+# path as written, but wrangler bundles every chunk into one index.js at the
+# module root, where the path no longer resolves: the Worker then fails with
+# `No such module "../../wasm/..."`. This rule matches only import paths that
+# start with `../`, so module discovery skips the .wasm files and the bundler
+# renames each such import to a root-level module. It replaces the default
+# CompiledWasm rule (`**/*.wasm`); `fallthrough = false` says so on purpose.
+[[rules]]
+type = "CompiledWasm"
+globs = ["../**/*.wasm"]
+fallthrough = false
+
 # Hyperdrive accelerates your external Postgres connection.
 # Create one with: wrangler hyperdrive create feedlog --connection-string="postgresql://..."
 # Replace the placeholder id below with the output. The one-click Deploy
