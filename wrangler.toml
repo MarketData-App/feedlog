@@ -82,3 +82,40 @@ queue = "feedlog-inbox"
 max_batch_size = 1
 max_retries = 3
 retry_delay = 60
+
+# MarketData staging: https://roadmap-staging.marketdata.app
+# Build and deploy: `pnpm deploy:staging`. It builds with CLOUDFLARE_ENV=staging,
+# so NuxtHub flattens this section into .output/server/wrangler.json, and then
+# runs `wrangler deploy --cwd .output --env staging`.
+# Migrate: `pnpm migrate:staging`.
+# Secrets: BETTER_AUTH_SECRET, RESEND_API_KEY, SYSTEM_ADMIN_EMAILS. Set them with
+#   wrangler secret put <NAME> --config wrangler.toml --env staging
+# Keep `--config wrangler.toml`: without it, wrangler reads the generated
+# .output config, and a top-level build there names the Worker "feedlog".
+# No queues here: the deploy token has no Queues permission, and the inbox
+# feature is not used. Top-level queues are not inherited by environments.
+[env.staging]
+name = "feedlog-staging"
+workers_dev = false
+routes = [{ pattern = "roadmap-staging.marketdata.app/*", zone_name = "marketdata.app" }]
+
+[[env.staging.hyperdrive]]
+binding = "POSTGRES"
+id = "95f7337ff2a74e0188ec3e7b0edd7256"
+
+[[env.staging.r2_buckets]]
+binding = "BLOB"
+bucket_name = "feedlog-staging"
+
+[env.staging.triggers]
+crons = ["0 3 * * *"]
+
+[env.staging.vars]
+BETTER_AUTH_URL = "https://roadmap-staging.marketdata.app"
+EMAIL_FROM = "MarketData Roadmap <roadmap@contact.marketdata.app>"
+AUTH_EMAIL_ENABLED = "true"
+# contact.marketdata.app is a send-only domain: no email verification on staging.
+AUTH_EMAIL_VERIFY = "false"
+MCP_ENABLED = "false"
+EMAIL_ALLOWED_DOMAINS = "resend.dev,marketdata.app,contact.marketdata.app"
+NOINDEX = "true"
