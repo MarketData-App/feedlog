@@ -37,7 +37,7 @@
     "@codemirror/language": "6.12.2",
     "@codemirror/state": "6.6.0",
     "@codemirror/view": "6.40.0",
-    "@marketdataapp/ui": "github:MarketDataApp/ui#v5.10.1",
+    "@marketdataapp/ui": "github:MarketDataApp/ui#v5.10.3",
     "@mastra/ai-sdk": "1.10.3",
     "@mastra/core": "1.67.0",
     "@mastra/memory": "1.30.0",
