@@ -13,7 +13,9 @@ Object.assign(globalThis, {
 })
 
 const {
+  DASHBOARD_TIMEOUT_MS,
   HANDOFF_TIMEOUT_MS,
+  NAVIGATION_MAX_PAGE_AGE_MS,
   SILENT_MESSAGE_TYPE,
   SILENT_PATH,
   SSO_REDIRECTED_KEY,
@@ -21,11 +23,15 @@ const {
   buildLoginHref,
   classifyUserResponse,
   decideHandoff,
+  fetchDashboardUserWith,
   headerLinkAction,
+  holdsTypedText,
   isEndpointLink,
   isHandoffExcludedPath,
   isSilentMessage,
+  isTextEntry,
   markRedirected,
+  mayNavigateAway,
   readRedirected,
   runHandoffFlow,
   silentHandoffUrl,
@@ -45,7 +51,7 @@ const teamSession = { ssoOrgId: null }
 
 test('decideHandoff: dashboard user and no board session → iframe', () => {
   assert.equal(decideHandoff({ amemberUser: customer, boardSession: null, redirectedThisSession: false, iframeFailed: false }), 'iframe')
-  // A redirect earlier in this browser session does not stop a silent try.
+  // A redirect earlier in this tab does not stop a silent try.
   assert.equal(decideHandoff({ amemberUser: customer, boardSession: null, redirectedThisSession: true, iframeFailed: false }), 'iframe')
 })
 
@@ -138,6 +144,7 @@ function flow(over: Partial<Parameters<typeof runHandoffFlow>[0]> & { board?: { 
     afterSignOut: async () => { calls.push('after-signout') },
     redirect: (url: string) => { calls.push(`redirect ${url}`) },
     currentUrl: () => `${BOARD}/p/abc`,
+    mayNavigate: () => true,
     ...over,
   }
   return { deps, calls, storage }
@@ -194,15 +201,17 @@ test('runHandoffFlow: a switch whose sign-out fails stops there', async () => {
 })
 
 test('runHandoffFlow: the iframe fails → one top-level redirect back to this page, marked first', async () => {
-  const { deps, calls, storage } = flow({ silentHandoff: async () => { calls.push('iframe'); return false } })
+  const { deps, calls, storage } = flow({ afterHandoffBoard: null, silentHandoff: async () => { calls.push('iframe'); return false } })
   assert.equal(await runHandoffFlow(deps), 'redirected')
-  assert.equal(calls.length, 3)
-  assert.equal(calls[2], `redirect ${PLUGIN}?return_to=${encodeURIComponent(`${BOARD}/p/abc`)}`)
+  // The session is read again before the redirect (a late cookie wins; see below).
+  assert.deepEqual(calls.slice(0, 3), ['fetch', 'iframe', 'refresh'])
+  assert.equal(calls.length, 4)
+  assert.equal(calls[3], `redirect ${PLUGIN}?return_to=${encodeURIComponent(`${BOARD}/p/abc`)}`)
   assert.equal(storage.getItem('feedlog:sso-redirected'), '1')
-  // The next load in the same browser session: no second redirect.
-  const again = flow({ silentHandoff: async () => { again.calls.push('iframe'); return false }, storage })
+  // The next load in the same tab: no second redirect.
+  const again = flow({ afterHandoffBoard: null, silentHandoff: async () => { again.calls.push('iframe'); return false }, storage })
   assert.equal(await runHandoffFlow(again.deps), 'failed')
-  assert.deepEqual(again.calls, ['fetch', 'iframe'])
+  assert.deepEqual(again.calls, ['fetch', 'iframe', 'refresh'])
 })
 
 test('runHandoffFlow: the frame answers but no board session appears (blocked cookie) → the fallback redirect', async () => {
@@ -214,9 +223,9 @@ test('runHandoffFlow: the frame answers but no board session appears (blocked co
 test('runHandoffFlow: a switch that cannot finish leaves the page signed out (logout refresh)', async () => {
   const storage = memoryStorage()
   markRedirected(storage)
-  const { deps, calls } = flow({ board: ssoA, storage, silentHandoff: async () => { calls.push('iframe'); return false } })
+  const { deps, calls } = flow({ board: ssoA, storage, afterHandoffBoard: null, silentHandoff: async () => { calls.push('iframe'); return false } })
   assert.equal(await runHandoffFlow(deps), 'failed')
-  assert.deepEqual(calls, ['fetch', 'signout', 'iframe', 'after-signout'])
+  assert.deepEqual(calls, ['fetch', 'signout', 'iframe', 'refresh', 'after-signout'])
 })
 
 // ── Header links: login return address, and the Log out intercept ─────────
@@ -354,7 +363,7 @@ test('waitForSilentMessage ignores forged messages and times out to false', asyn
   assert.ok(Date.now() - started >= 40)
 })
 
-// ── At most one top-level redirect per browser session ─────────────────────
+// ── At most one top-level redirect per tab (sessionStorage) ────────────────
 
 function memoryStorage() {
   const map = new Map<string, string>()
@@ -386,7 +395,7 @@ test('blocked storage counts as already redirected, and a mark that cannot be ke
   assert.equal(markRedirected(forgetful), false)
 })
 
-test('the redirect loop is closed: blocked board cookies give one redirect per browser session', () => {
+test('the redirect loop is closed: blocked board cookies give one redirect per tab', () => {
   const storage = memoryStorage()
   const decisions: string[] = []
   // Three page loads where the board never keeps a session.
@@ -435,4 +444,262 @@ test('frame-ancestors: other /sso pages and look-alikes stay unframable', async 
     const res = await request(new Request(`${BOARD}${path}`))
     assert.equal(res.headers.get('content-security-policy'), "frame-ancestors 'none'", path)
   }
+})
+
+// ── Final review I1: a late navigation must not lose typed text ────────────
+
+// I1a: the frame ran out of time, but the board cookie arrived (a slow frame).
+test('runHandoffFlow: the frame times out but the board cookie arrived → signed in, no redirect', async () => {
+  const { deps, calls, storage } = flow({ silentHandoff: async () => { calls.push('iframe'); return false } })
+  assert.equal(await runHandoffFlow(deps), 'signed-in')
+  assert.deepEqual(calls, ['fetch', 'iframe', 'refresh'])
+  assert.equal(storage.getItem('feedlog:sso-redirected'), null, 'the one redirect of the tab is not used up')
+})
+
+// I1b: the dashboard question has a time limit, and running out is "unknown".
+function fakeResponse(status: number, body: unknown) {
+  return { status, json: async () => body }
+}
+// A fetch that answers only when its signal aborts it (as the browser's does).
+function hangingFetch(seen: { init?: { credentials?: string, signal?: AbortSignal } }) {
+  return (_url: string, init: { credentials?: string, signal?: AbortSignal }) => new Promise<never>((_resolve, reject) => {
+    seen.init = init
+    init.signal?.addEventListener('abort', () => reject(new DOMException('The operation was aborted.', 'TimeoutError')))
+  })
+}
+
+test('the dashboard question waits 5 s at most', () => {
+  assert.equal(DASHBOARD_TIMEOUT_MS, 5000)
+})
+
+test('fetchDashboardUserWith: asks with credentials and classifies the answer', async () => {
+  let seenInit: { credentials?: string, signal?: AbortSignal } | undefined
+  const answer = (status: number, body: unknown) => async (_url: string, init: { credentials?: string, signal?: AbortSignal }) => { seenInit = init; return fakeResponse(status, body) }
+  assert.deepEqual(await fetchDashboardUserWith({ fetch: answer(200, customer), apiUrl: 'https://d/api/user/', timeoutMs: 1000 }), { kind: 'user', user: customer })
+  assert.equal(seenInit?.credentials, 'include')
+  assert.ok(seenInit?.signal, 'the request carries an abort signal')
+  assert.deepEqual(await fetchDashboardUserWith({ fetch: answer(401, null), apiUrl: 'https://d/api/user/', timeoutMs: 1000 }), { kind: 'none' })
+  const failing = async () => { throw new TypeError('Failed to fetch') }
+  assert.deepEqual(await fetchDashboardUserWith({ fetch: failing, apiUrl: 'https://d/api/user/', timeoutMs: 1000 }), { kind: 'unknown' })
+})
+
+test('fetchDashboardUserWith: no answer within the limit → unknown, and the request is aborted', async () => {
+  const seen: { init?: { signal?: AbortSignal } } = {}
+  const started = Date.now()
+  assert.deepEqual(await fetchDashboardUserWith({ fetch: hangingFetch(seen), apiUrl: 'https://d/api/user/', timeoutMs: 50 }), { kind: 'unknown' })
+  const took = Date.now() - started
+  assert.ok(took >= 40 && took < 1000, `took ${took} ms`)
+  assert.equal(seen.init?.signal?.aborted, true)
+  // A fetch that never settles, even when aborted: the limit still holds.
+  const never = () => new Promise<never>(() => {})
+  assert.deepEqual(await fetchDashboardUserWith({ fetch: never, apiUrl: 'https://d/api/user/', timeoutMs: 30 }), { kind: 'unknown' })
+  // A body that never ends counts the same.
+  const slowBody = async () => ({ status: 200, json: () => new Promise(() => {}) })
+  assert.deepEqual(await fetchDashboardUserWith({ fetch: slowBody, apiUrl: 'https://d/api/user/', timeoutMs: 30 }), { kind: 'unknown' })
+})
+
+test('runHandoffFlow: a dashboard that does not answer in time signs nobody out and redirects nowhere', async () => {
+  const seen = {}
+  const { deps, calls } = flow({
+    board: ssoA,
+    fetchDashboardUser: async () => { calls.push('fetch'); return fetchDashboardUserWith({ fetch: hangingFetch(seen), apiUrl: 'https://d/api/user/', timeoutMs: 30 }) },
+  })
+  assert.equal(await runHandoffFlow(deps), 'unknown')
+  assert.deepEqual(calls, ['fetch'])
+  const visitor = flow({
+    fetchDashboardUser: async () => { visitor.calls.push('fetch'); return fetchDashboardUserWith({ fetch: hangingFetch(seen), apiUrl: 'https://d/api/user/', timeoutMs: 30 }) },
+  })
+  assert.equal(await runHandoffFlow(visitor.deps), 'unknown')
+  assert.deepEqual(visitor.calls, ['fetch'])
+})
+
+// I1c: no redirect and no reload while the visitor types, or on a page that
+// has been open for a while. The next page load tries again.
+test('the navigation guard: pages older than 15 s are not navigated', () => {
+  assert.equal(NAVIGATION_MAX_PAGE_AGE_MS, 15_000)
+})
+
+test('isTextEntry: text inputs, textareas and contenteditable are text fields; buttons and boxes are not', () => {
+  for (const type of [undefined, '', 'text', 'search', 'email', 'password', 'url', 'tel', 'number', 'TEXT']) {
+    assert.equal(isTextEntry({ tagName: 'INPUT', type }), true, `input ${type}`)
+  }
+  assert.equal(isTextEntry({ tagName: 'input', type: 'text' }), true)
+  assert.equal(isTextEntry({ tagName: 'TEXTAREA' }), true)
+  assert.equal(isTextEntry({ tagName: 'DIV', isContentEditable: true }), true)
+  for (const type of ['checkbox', 'radio', 'button', 'submit', 'reset', 'hidden', 'range', 'color', 'file', 'image']) {
+    assert.equal(isTextEntry({ tagName: 'INPUT', type }), false, `input ${type}`)
+  }
+  for (const tagName of ['BUTTON', 'A', 'BODY', 'IFRAME', 'SELECT']) {
+    assert.equal(isTextEntry({ tagName }), false, tagName)
+  }
+  assert.equal(isTextEntry(null), false)
+  assert.equal(isTextEntry(undefined), false)
+})
+
+test('holdsTypedText: text the visitor typed counts; empty, server-filled and non-text fields do not', () => {
+  assert.equal(holdsTypedText([]), false)
+  assert.equal(holdsTypedText([{ tagName: 'INPUT', type: 'search', value: '', defaultValue: '' }]), false)
+  // A search box the server filled from the URL (?q=forex) holds nothing new.
+  assert.equal(holdsTypedText([{ tagName: 'INPUT', type: 'search', value: 'forex', defaultValue: 'forex' }]), false)
+  assert.equal(holdsTypedText([{ tagName: 'INPUT', type: 'text', value: '   ', defaultValue: '' }]), false)
+  assert.equal(holdsTypedText([{ tagName: 'INPUT', type: 'search', value: 'forex', defaultValue: '' }]), true)
+  assert.equal(holdsTypedText([{ tagName: 'TEXTAREA', value: 'a draft', defaultValue: '' }]), true)
+  // The comment editor (tiptap): a contenteditable with text in it.
+  assert.equal(holdsTypedText([{ tagName: 'DIV', isContentEditable: true, text: 'Please add' }]), true)
+  assert.equal(holdsTypedText([{ tagName: 'DIV', isContentEditable: true, text: '\n ' }]), false)
+  // Checkboxes and hidden inputs carry values, not typed text.
+  assert.equal(holdsTypedText([
+    { tagName: 'INPUT', type: 'checkbox', value: 'on', defaultValue: '' },
+    { tagName: 'INPUT', type: 'hidden', value: 'token', defaultValue: '' },
+  ]), false)
+})
+
+test('mayNavigateAway: only a fresh page with no text field in use may be navigated', () => {
+  const fresh = { focused: { tagName: 'BODY' }, unsavedText: false, pageAgeMs: 3000 }
+  assert.equal(mayNavigateAway(fresh), true)
+  assert.equal(mayNavigateAway({ ...fresh, focused: null }), true)
+  assert.equal(mayNavigateAway({ ...fresh, focused: { tagName: 'BUTTON' } }), true)
+  // A text field, a textarea or a contenteditable has the focus.
+  assert.equal(mayNavigateAway({ ...fresh, focused: { tagName: 'INPUT', type: 'search' } }), false)
+  assert.equal(mayNavigateAway({ ...fresh, focused: { tagName: 'TEXTAREA' } }), false)
+  assert.equal(mayNavigateAway({ ...fresh, focused: { tagName: 'DIV', isContentEditable: true } }), false)
+  // Typed text somewhere on the page, focused or not.
+  assert.equal(mayNavigateAway({ ...fresh, unsavedText: true }), false)
+  // The page has been open longer than 15 s.
+  assert.equal(mayNavigateAway({ ...fresh, pageAgeMs: 15_000 }), true)
+  assert.equal(mayNavigateAway({ ...fresh, pageAgeMs: 15_001 }), false)
+  assert.equal(mayNavigateAway({ ...fresh, pageAgeMs: Number.NaN }), false)
+})
+
+test('runHandoffFlow: the fallback redirect is skipped while the guard says no, and the tab keeps its one redirect', async () => {
+  const { deps, calls, storage } = flow({ afterHandoffBoard: null, silentHandoff: async () => { calls.push('iframe'); return false }, mayNavigate: () => false })
+  assert.equal(await runHandoffFlow(deps), 'deferred')
+  assert.deepEqual(calls, ['fetch', 'iframe', 'refresh'])
+  assert.equal(storage.getItem('feedlog:sso-redirected'), null)
+})
+
+test('runHandoffFlow: the logout sync is skipped while the guard says no (no sign-out, no reload)', async () => {
+  const { deps, calls } = flow({ board: ssoA, dashboard: { kind: 'none' }, mayNavigate: () => false })
+  assert.equal(await runHandoffFlow(deps), 'deferred')
+  assert.deepEqual(calls, ['fetch'])
+})
+
+test('runHandoffFlow: an account switch (it ends in a reload) is skipped while the guard says no', async () => {
+  const { deps, calls } = flow({ board: ssoA, mayNavigate: () => false })
+  assert.equal(await runHandoffFlow(deps), 'deferred')
+  assert.deepEqual(calls, ['fetch'])
+})
+
+test('runHandoffFlow: the in-page sign-in needs no navigation, so the guard does not stop it', async () => {
+  const { deps, calls } = flow({ mayNavigate: () => false })
+  assert.equal(await runHandoffFlow(deps), 'signed-in')
+  assert.deepEqual(calls, ['fetch', 'iframe', 'refresh'])
+})
+
+test('runHandoffFlow: the visitor starts typing during the logout sign-out → the empty session is read in place, no reload', async () => {
+  let allowed = true
+  const { deps, calls } = flow({
+    board: ssoA,
+    dashboard: { kind: 'none' },
+    mayNavigate: () => allowed,
+    signOutBoard: async () => { calls.push('signout'); allowed = false; return true },
+  })
+  assert.equal(await runHandoffFlow(deps), 'signed-out')
+  assert.deepEqual(calls, ['fetch', 'signout', 'refresh'])
+})
+
+test('runHandoffFlow: a switch that cannot finish while the visitor types → signed out in place, no reload', async () => {
+  const storage = memoryStorage()
+  markRedirected(storage)
+  let allowed = true
+  const { deps, calls } = flow({
+    board: ssoA,
+    storage,
+    afterHandoffBoard: null,
+    mayNavigate: () => allowed,
+    silentHandoff: async () => { calls.push('iframe'); allowed = false; return false },
+  })
+  assert.equal(await runHandoffFlow(deps), 'failed')
+  assert.deepEqual(calls, ['fetch', 'signout', 'iframe', 'refresh'])
+})
+
+// I1d: the layout unmounted (the flow is cancelled): nothing more happens.
+test('runHandoffFlow: cancelled while the dashboard answers → no sign-out, no frame', async () => {
+  const controller = new AbortController()
+  const { deps, calls } = flow({
+    board: ssoA,
+    signal: controller.signal,
+    fetchDashboardUser: async () => { calls.push('fetch'); controller.abort(); return { kind: 'none' } },
+  })
+  assert.equal(await runHandoffFlow(deps), 'cancelled')
+  assert.deepEqual(calls, ['fetch'])
+})
+
+test('runHandoffFlow: cancelled during the frame → no refresh, no redirect, the mark untouched', async () => {
+  const controller = new AbortController()
+  const { deps, calls, storage } = flow({
+    afterHandoffBoard: null,
+    signal: controller.signal,
+    silentHandoff: async () => { calls.push('iframe'); controller.abort(); return false },
+  })
+  assert.equal(await runHandoffFlow(deps), 'cancelled')
+  assert.deepEqual(calls, ['fetch', 'iframe'])
+  assert.equal(storage.getItem('feedlog:sso-redirected'), null)
+})
+
+test('runHandoffFlow: cancelled during the frame refresh → no redirect', async () => {
+  const controller = new AbortController()
+  const { deps, calls } = flow({
+    signal: controller.signal,
+    silentHandoff: async () => { calls.push('iframe'); return false },
+    refreshInPlace: async () => { calls.push('refresh'); controller.abort() },
+    boardSession: () => null,
+  })
+  assert.equal(await runHandoffFlow(deps), 'cancelled')
+  assert.deepEqual(calls, ['fetch', 'iframe', 'refresh'])
+})
+
+test('runHandoffFlow: cancelled during the logout sign-out → no reload', async () => {
+  const controller = new AbortController()
+  const { deps, calls } = flow({
+    board: ssoA,
+    dashboard: { kind: 'none' },
+    signal: controller.signal,
+    signOutBoard: async () => { calls.push('signout'); controller.abort(); return true },
+  })
+  assert.equal(await runHandoffFlow(deps), 'cancelled')
+  assert.deepEqual(calls, ['fetch', 'signout'])
+})
+
+test('runHandoffFlow: cancelled during the switch sign-out → no frame', async () => {
+  const controller = new AbortController()
+  const { deps, calls } = flow({
+    board: ssoA,
+    signal: controller.signal,
+    signOutBoard: async () => { calls.push('signout'); controller.abort(); return true },
+  })
+  assert.equal(await runHandoffFlow(deps), 'cancelled')
+  assert.deepEqual(calls, ['fetch', 'signout'])
+})
+
+test('waitForSilentMessage: a cancel resolves false at once', async () => {
+  const controller = new AbortController()
+  const pending = waitForSilentMessage({ target: new EventTarget(), ownOrigin: BOARD, source: {}, timeoutMs: 5000, signal: controller.signal })
+  const started = Date.now()
+  controller.abort()
+  assert.equal(await pending, false)
+  assert.ok(Date.now() - started < 1000)
+  // Already cancelled before the wait starts.
+  assert.equal(await waitForSilentMessage({ target: new EventTarget(), ownOrigin: BOARD, source: {}, timeoutMs: 5000, signal: controller.signal }), false)
+})
+
+test('fetchDashboardUserWith: a cancel ends the question at once as unknown', async () => {
+  const controller = new AbortController()
+  const seen: { init?: { signal?: AbortSignal } } = {}
+  const pending = fetchDashboardUserWith({ fetch: hangingFetch(seen), apiUrl: 'https://d/api/user/', timeoutMs: 5000, signal: controller.signal })
+  const started = Date.now()
+  controller.abort()
+  assert.deepEqual(await pending, { kind: 'unknown' })
+  assert.ok(Date.now() - started < 1000)
+  assert.equal(seen.init?.signal?.aborted, true)
 })

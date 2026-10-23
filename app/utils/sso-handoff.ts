@@ -8,12 +8,18 @@ import { buildSsoLoginUrl } from './sso-login-url'
 // return_to=/sso/silent; the plugin hands a signed token to /api/sso/jwt, which
 // sets the board session and lands on /sso/silent, which tells this page by
 // postMessage. If that cannot finish (blocked cookies, a slow or refused
-// frame), the page falls back to one top-level redirect per browser session.
+// frame), the page falls back to one top-level redirect per tab (the mark is in
+// sessionStorage, which belongs to one tab).
 // When the dashboard reports nobody and the board holds an SSO session, the
 // board signs that session out. When the dashboard reports another account than
 // the board's SSO session (a shared computer, or a sign-in link someone else
 // made), the board signs its session out and hands off again ('switch'). A
 // /team-login (local) session is never touched.
+//
+// A redirect or a reload must never take typed text away: the flow skips them
+// while a text field is in use or holds typed text, and on a page that has been
+// open longer than 15 s (mayNavigateAway); the next page load tries again. The
+// flow stops when the layout unmounts (the signal).
 //
 // Everything here is pure so the rules can be tested without a browser.
 
@@ -21,6 +27,10 @@ export const SILENT_PATH = '/sso/silent'
 export const SILENT_MESSAGE_TYPE = 'feedlog:sso-silent'
 export const SSO_REDIRECTED_KEY = 'feedlog:sso-redirected'
 export const HANDOFF_TIMEOUT_MS = 8000
+/** The dashboard question (/api/user/) gives up after this; no answer is "unknown". */
+export const DASHBOARD_TIMEOUT_MS = 5000
+/** A page open longer than this is never redirected or reloaded by the flow. */
+export const NAVIGATION_MAX_PAGE_AGE_MS = 15_000
 
 export type HandoffStep = 'none' | 'iframe' | 'redirect' | 'signout' | 'switch'
 
@@ -89,6 +99,53 @@ export function classifyUserResponse(status: number, body: unknown): DashboardUs
   return { kind: 'user', user: body }
 }
 
+interface ResponseLike {
+  status: number
+  json: () => Promise<unknown>
+}
+type FetchLike = (url: string, init: { credentials: 'include', signal: AbortSignal }) => Promise<ResponseLike>
+
+// Asks the dashboard who is logged in, with a time limit (the same as
+// AbortSignal.timeout) and the flow's cancel signal. Running out of time, a
+// cancel, a network error or a body that never ends are all "unknown", which
+// changes nothing. The time limit holds even for a fetch that ignores its
+// signal.
+export function fetchDashboardUserWith(opts: {
+  fetch: FetchLike
+  apiUrl: string
+  timeoutMs: number
+  signal?: AbortSignal
+}): Promise<DashboardUser> {
+  return new Promise((resolve) => {
+    const controller = new AbortController()
+    let settled = false
+    const finish = (answer: DashboardUser) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      opts.signal?.removeEventListener('abort', stop)
+      resolve(answer)
+    }
+    const stop = () => {
+      controller.abort()
+      finish({ kind: 'unknown' })
+    }
+    const timer = setTimeout(stop, opts.timeoutMs)
+    if (opts.signal?.aborted) return stop()
+    opts.signal?.addEventListener('abort', stop, { once: true })
+    ;(async () => {
+      try {
+        const res = await opts.fetch(opts.apiUrl, { credentials: 'include', signal: controller.signal })
+        const body = res.status === 200 ? await res.json().catch(() => null) : null
+        finish(classifyUserResponse(res.status, body))
+      }
+      catch {
+        finish({ kind: 'unknown' })
+      }
+    })()
+  })
+}
+
 // The dashboard login, returning to the page the visitor is on.
 export function buildLoginHref(loginUrl: string, currentUrl: string): string {
   const url = new URL(loginUrl)
@@ -154,12 +211,14 @@ export function isSilentMessage(event: { origin: string, data: unknown }, ownOri
 }
 
 // Waits for /sso/silent in the given frame to report back. Resolves false when
-// the time runs out (a refused frame, an aMember login form, blocked cookies).
+// the time runs out (a refused frame, an aMember login form, blocked cookies),
+// and at once when the signal cancels the wait (the layout unmounted).
 export function waitForSilentMessage(opts: {
   target: EventTarget
   ownOrigin: string
   source: unknown
   timeoutMs: number
+  signal?: AbortSignal
 }): Promise<boolean> {
   return new Promise((resolve) => {
     const onMessage = (event: Event) => {
@@ -167,13 +226,17 @@ export function waitForSilentMessage(opts: {
       if (message.source !== opts.source || !isSilentMessage(message, opts.ownOrigin)) return
       finish(true)
     }
+    const onAbort = () => finish(false)
     const timer = setTimeout(() => finish(false), opts.timeoutMs)
     function finish(ok: boolean) {
       clearTimeout(timer)
       opts.target.removeEventListener('message', onMessage)
+      opts.signal?.removeEventListener('abort', onAbort)
       resolve(ok)
     }
+    if (opts.signal?.aborted) return finish(false)
     opts.target.addEventListener('message', onMessage)
+    opts.signal?.addEventListener('abort', onAbort, { once: true })
   })
 }
 
@@ -216,7 +279,73 @@ export function isHandoffExcludedPath(path: string, localeCodes: string[]): bool
     || bare.startsWith('/dashboard/')
 }
 
-export type HandoffOutcome = 'skipped' | 'unknown' | 'none' | 'signed-in' | 'signed-out' | 'redirected' | 'failed'
+// ── The navigation guard ───────────────────────────────────────────────────
+
+/** What the guard reads of an element (document.activeElement, or a field). */
+export interface EditableView {
+  tagName?: string | null
+  type?: string | null
+  isContentEditable?: boolean | null
+}
+
+/** A field on the page: an input, a textarea or a contenteditable element. */
+export interface FieldView extends EditableView {
+  value?: string | null
+  defaultValue?: string | null
+  /** The text of a contenteditable element. */
+  text?: string | null
+}
+
+const NON_TEXT_INPUT_TYPES = new Set(['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'])
+
+// A text field, a textarea, or a contenteditable element (the comment editor).
+export function isTextEntry(el: EditableView | null | undefined): boolean {
+  if (!el) return false
+  if (el.isContentEditable) return true
+  const tag = String(el.tagName ?? '').toUpperCase()
+  if (tag === 'TEXTAREA') return true
+  if (tag === 'INPUT') return !NON_TEXT_INPUT_TYPES.has(String(el.type || 'text').toLowerCase())
+  return false
+}
+
+// Whether a field on the page holds text the visitor typed: a text field or a
+// textarea whose value differs from what the server rendered, or a
+// contenteditable element with text.
+export function holdsTypedText(fields: Iterable<FieldView>): boolean {
+  for (const field of fields) {
+    if (!isTextEntry(field)) continue
+    if (field.isContentEditable) {
+      if ((field.text ?? '').trim()) return true
+      continue
+    }
+    const value = field.value ?? ''
+    if (value.trim() && value !== (field.defaultValue ?? '')) return true
+  }
+  return false
+}
+
+// May the flow redirect or reload the page now? Never while a text field has
+// the focus or any field holds typed text, and never on a page that has been
+// open longer than 15 s (the visitor is reading or writing by then). A skipped
+// step is not lost: the next page load runs the flow again.
+export function mayNavigateAway(input: { focused: EditableView | null | undefined, unsavedText: boolean, pageAgeMs: number }): boolean {
+  if (isTextEntry(input.focused)) return false
+  if (input.unsavedText) return false
+  return Number.isFinite(input.pageAgeMs) && input.pageAgeMs <= NAVIGATION_MAX_PAGE_AGE_MS
+}
+
+export type HandoffOutcome =
+  | 'skipped'
+  | 'unknown'
+  | 'none'
+  | 'signed-in'
+  | 'signed-out'
+  | 'redirected'
+  | 'failed'
+  /** A step that ends in a redirect or a reload waited for the next page load (mayNavigate). */
+  | 'deferred'
+  /** The layout unmounted; nothing more was done. */
+  | 'cancelled'
 
 // What the page provides to the handoff run (the composable wires the real
 // browser and Nuxt pieces; the tests use fakes).
@@ -238,6 +367,10 @@ export interface HandoffDeps {
   afterSignOut: () => Promise<void>
   redirect: (url: string) => void
   currentUrl: () => string
+  /** The navigation guard (mayNavigateAway with the page's state); asked just before each step that ends in a redirect or a reload. */
+  mayNavigate: () => boolean
+  /** Aborted when the layout unmounts: no step runs after that. */
+  signal?: AbortSignal
 }
 
 // One run per page load (the default layout's mount).
@@ -246,9 +379,11 @@ export async function runHandoffFlow(deps: HandoffDeps): Promise<HandoffOutcome>
   const board = deps.boardSession()
   // Nothing the dashboard says changes a team-login session: do not ask.
   if (board && !board.ssoOrgId) return 'skipped'
+  const cancelled = () => !!deps.signal?.aborted
 
   const dashboard = await deps.fetchDashboardUser()
-  // No clear answer (network, CORS): leave everything as it is.
+  if (cancelled()) return 'cancelled'
+  // No clear answer (network, CORS, no answer in time): leave everything as it is.
   if (dashboard.kind === 'unknown') return 'unknown'
   const amemberUser = dashboard.kind === 'user' ? dashboard.user : null
 
@@ -259,23 +394,38 @@ export async function runHandoffFlow(deps: HandoffDeps): Promise<HandoffOutcome>
     iframeFailed: false,
   })
   if (step === 'signout') {
+    // The logout sync ends in a reload: not now if the visitor types or the
+    // page is old. The session stays until the next page load.
+    if (!deps.mayNavigate()) return 'deferred'
     if (!(await deps.signOutBoard())) return 'failed'
-    await deps.afterSignOut()
+    if (cancelled()) return 'cancelled'
+    // Asked again: the sign-out took time. Without the reload, the empty
+    // session is read in place (the per-viewer flags re-sync).
+    if (deps.mayNavigate()) await deps.afterSignOut()
+    else await deps.refreshInPlace()
     return 'signed-out'
   }
   let switched = false
   if (step === 'switch') {
+    // A switch ends in a reload (one account replaces another), or in the
+    // logout reload when it cannot finish: the same guard.
+    if (!deps.mayNavigate()) return 'deferred'
     // The old account's session ends before the new one is fetched.
     if (!(await deps.signOutBoard())) return 'failed'
+    if (cancelled()) return 'cancelled'
     switched = true
     step = 'iframe'
   }
   if (step !== 'iframe') return 'none'
 
-  if (await deps.silentHandoff()) {
-    await deps.refreshInPlace()
-    if (deps.boardSession()) return 'signed-in'
-  }
+  await deps.silentHandoff()
+  if (cancelled()) return 'cancelled'
+  // Read the session whether the frame answered or ran out of time: a slow
+  // frame can set the board cookie after the wait ended, and then the visitor
+  // is signed in with no redirect.
+  await deps.refreshInPlace()
+  if (cancelled()) return 'cancelled'
+  if (deps.boardSession()) return 'signed-in'
 
   // The board has no session now (none before, or signed out for the switch).
   const next = decideHandoff({
@@ -284,11 +434,19 @@ export async function runHandoffFlow(deps: HandoffDeps): Promise<HandoffOutcome>
     redirectedThisSession: readRedirected(deps.storage),
     iframeFailed: true,
   })
-  // Mark first; a page that cannot keep the mark never redirects.
-  if (next === 'redirect' && markRedirected(deps.storage)) {
-    deps.redirect(buildSsoLoginUrl(deps.ssoLoginUrl, deps.currentUrl()))
-    return 'redirected'
+  const mayNavigate = deps.mayNavigate()
+  if (next === 'redirect') {
+    // Skipped while the visitor types or the page is old; the tab keeps its
+    // one redirect for the next page load.
+    if (!mayNavigate) return 'deferred'
+    // Mark first; a page that cannot keep the mark never redirects.
+    if (markRedirected(deps.storage)) {
+      deps.redirect(buildSsoLoginUrl(deps.ssoLoginUrl, deps.currentUrl()))
+      return 'redirected'
+    }
   }
-  if (switched) await deps.afterSignOut()
+  // A switch that cannot finish: the empty session is already read in place;
+  // reload once if the page allows it, so nothing of the old account stays.
+  if (switched && mayNavigate) await deps.afterSignOut()
   return 'failed'
 }

@@ -1,17 +1,22 @@
 <script setup lang="ts">
 import type { AuthSession } from '~/composables/useAuth'
 import { resolveAttachmentUrl } from '~/utils/attachment'
+import { isBoardAdminRole } from '~/utils/board-admin'
 
 // MarketData: the account control for the board admin's own sign-in
 // (/team-login, a local session). It takes the place of the kit's control in
 // the header's #user-profile slot and wears the kit's classes, so it looks
-// like the marketdata.app control: the board identity, a link to the admin
-// pages, and sign-out. Profile and password stay in the dashboard's own menu.
+// like the marketdata.app control: the board identity, sign-out, and for the
+// org's owners and managers (the board bar's rule) the "Board admin" label and
+// a link to the admin pages. Profile and password stay in the dashboard's own
+// menu.
 const { data: session } = useNuxtData<AuthSession | null>('auth-session')
 const { signOut } = useAuth()
 const localePath = useLocalePath()
+const orgCtx = useOrgContext()
 
 const user = computed(() => session.value?.user)
+const canAdmin = computed(() => !!user.value && !user.value.isAnonymous && isBoardAdminRole(orgCtx.value.role))
 const avatarUrl = computed(() => resolveAttachmentUrl(user.value?.image))
 const avatarError = ref(false)
 const open = ref(false)
@@ -64,10 +69,10 @@ async function handleSignOut() {
       <div class="user-profile-dropdown-header">
         <div class="user-profile-dropdown-name">{{ user.name }}</div>
         <div class="user-profile-dropdown-email">{{ user.email }}</div>
-        <div class="user-profile-dropdown-email">{{ $t('nav.boardAdmin') }}</div>
+        <div v-if="canAdmin" class="user-profile-dropdown-email">{{ $t('nav.boardAdmin') }}</div>
       </div>
       <ul class="user-profile-dropdown-menu">
-        <li>
+        <li v-if="canAdmin">
           <NuxtLink :to="localePath('/dashboard')" class="user-profile-dropdown-link" @click="open = false">
             {{ $t('nav.admin') }}
           </NuxtLink>

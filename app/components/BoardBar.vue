@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AuthSession } from '~/composables/useAuth'
+import { isBoardAdminRole } from '~/utils/board-admin'
 
 // MarketData: the board's own navigation, a slim bar under the marketdata.app
 // site header (which links only website pages). Feature Requests, Roadmap,
@@ -17,8 +18,8 @@ const { isGuest } = useGuestSession()
 const newRequest = useNewRequest()
 
 const signedIn = computed(() => !isGuest.value && !!session.value?.user)
-const canAdmin = computed(() =>
-  signedIn.value && (orgCtx.value.role === 'owner' || orgCtx.value.role === 'manager'))
+// The same rule as the header's admin control (BoardAdminControl).
+const canAdmin = computed(() => signedIn.value && isBoardAdminRole(orgCtx.value.role))
 
 // A post page belongs to the feature-request list it was opened from.
 const LIST_ROUTES = new Set(['index', 'p-slug'])

@@ -1,15 +1,19 @@
 import { initUserProfile } from '@marketdataapp/ui/user-profile'
 import type { AuthSession } from '~/composables/useAuth'
 import {
+  DASHBOARD_TIMEOUT_MS,
   HANDOFF_TIMEOUT_MS,
   boardSessionFor,
   buildLoginHref,
-  classifyUserResponse,
+  fetchDashboardUserWith,
   headerLinkAction,
+  holdsTypedText,
+  mayNavigateAway,
   runHandoffFlow,
   silentHandoffUrl,
   waitForSilentMessage,
   type DashboardUser,
+  type FieldView,
 } from '~/utils/sso-handoff'
 
 // MarketData: the board follows the marketdata.app dashboard login (spec §11).
@@ -17,8 +21,10 @@ import {
 // - the kit's account control in the header's #user-profile slot;
 // - the "Log in" links, which return to the page the visitor is on;
 // - "Log out", which also ends the board's SSO session;
-// - the background handoff (hidden iframe, one top-level fallback per browser
-//   session), the account switch, and the logout sync (runHandoffFlow).
+// - the background handoff (hidden iframe, one top-level fallback per tab),
+//   the account switch, and the logout sync (runHandoffFlow). The flow never
+//   redirects or reloads while the visitor types or on a page open longer than
+//   15 s (mayNavigate), and it stops when the layout unmounts (cancelHandoff).
 // Client only. The default layout calls it; it needs the auth-session payload
 // that the layout has awaited.
 
@@ -121,15 +127,18 @@ export function useAmemberSession() {
     signOutBoard().finally(() => window.location.assign(target))
   }
 
-  async function fetchDashboardUser(): Promise<DashboardUser> {
-    try {
-      const res = await fetch(apiUrl, { credentials: 'include' })
-      const body = res.status === 200 ? await res.json().catch(() => null) : null
-      return classifyUserResponse(res.status, body)
-    }
-    catch {
-      return { kind: 'unknown' }
-    }
+  // Aborted when the layout unmounts (cancelHandoff): the dashboard question,
+  // the frame wait and every later step of the flow stop.
+  let controller: AbortController | null = null
+
+  // At most 5 s; no answer in time is "unknown", which changes nothing.
+  function fetchDashboardUser(): Promise<DashboardUser> {
+    return fetchDashboardUserWith({
+      fetch: (url, init) => window.fetch(url, init),
+      apiUrl,
+      timeoutMs: DASHBOARD_TIMEOUT_MS,
+      signal: controller?.signal,
+    })
   }
 
   // The aMember plugin in a hidden frame. It never shows anything: a login
@@ -150,6 +159,7 @@ export function useAmemberSession() {
       ownOrigin: window.location.origin,
       source: frame.contentWindow,
       timeoutMs: HANDOFF_TIMEOUT_MS,
+      signal: controller?.signal,
     })
     frame.remove()
     return answered
@@ -174,10 +184,35 @@ export function useAmemberSession() {
     if (!session.value?.user) reloadNuxtApp()
   }
 
+  // The navigation guard, read from the page just before a redirect or a
+  // reload: the focused element, typed text in any field (the comment editor,
+  // the new-request form, the search box), and how long the page is open.
+  function pageFields(): FieldView[] {
+    return Array.from(document.querySelectorAll<HTMLElement>('input, textarea, [contenteditable]'), (el) => {
+      const field = el as HTMLElement & { type?: string, value?: string, defaultValue?: string }
+      return {
+        tagName: el.tagName,
+        type: field.type ?? null,
+        isContentEditable: el.isContentEditable,
+        value: typeof field.value === 'string' ? field.value : null,
+        defaultValue: typeof field.defaultValue === 'string' ? field.defaultValue : null,
+        text: el.isContentEditable ? el.textContent : null,
+      }
+    })
+  }
+  function mayNavigate(): boolean {
+    return mayNavigateAway({
+      focused: document.activeElement as HTMLElement | null,
+      unsavedText: holdsTypedText(pageFields()),
+      pageAgeMs: performance.now(),
+    })
+  }
+
   let started = false
   async function runHandoff(): Promise<void> {
     if (started) return
     started = true
+    controller = new AbortController()
     await runHandoffFlow({
       ssoLoginUrl,
       path: route.path,
@@ -191,8 +226,15 @@ export function useAmemberSession() {
       afterSignOut,
       redirect: url => window.location.assign(url),
       currentUrl: () => window.location.href,
+      mayNavigate,
+      signal: controller.signal,
     })
   }
 
-  return { isLocalSession, mountControl, onHeaderEvent, runHandoff }
+  // The layout unmounts: no redirect, reload or sign-out after this.
+  function cancelHandoff() {
+    controller?.abort()
+  }
+
+  return { isLocalSession, mountControl, onHeaderEvent, runHandoff, cancelHandoff }
 }

@@ -83,9 +83,11 @@ onMounted(() => {
   else if (slot) {
     cleanupControl = amember.mountControl(slot)
   }
-  amember.runHandoff()
+  // A failed run changes nothing; the next page load runs it again.
+  amember.runHandoff().catch(() => {})
 })
 onBeforeUnmount(() => {
+  amember.cancelHandoff()
   const root = headerHost.value?.querySelector('.site-header')
   for (const type of HEADER_EVENTS) root?.removeEventListener(type, amember.onHeaderEvent, true)
   cleanupControl?.()
