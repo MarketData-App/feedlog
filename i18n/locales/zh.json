@@ -56,7 +56,8 @@
     "widget": "反馈组件",
     "featureRequests": "功能请求",
     "admin": "管理后台",
-    "boardBar": "反馈看板"
+    "boardBar": "反馈看板",
+    "boardAdmin": "看板管理员"
   },
   "board": {
     "boards": "看板",

@@ -4,7 +4,8 @@ import type { AuthSession } from '~/composables/useAuth'
 // MarketData: the board's own navigation, a slim bar under the marketdata.app
 // site header (which links only website pages). Feature Requests, Roadmap,
 // New request, and Admin for the org's owners and managers; plus the board's
-// language switch and, for now, its sign-in / account menu.
+// language switch. Sign-in and the account live in the header's account
+// control (default layout).
 const localePath = useLocalePath()
 const route = useRoute()
 const routeBaseName = useRouteBaseName()
@@ -76,7 +77,6 @@ const links = computed(() => [
           <span class="hidden sm:inline">{{ $t('nav.admin') }}</span>
         </NuxtLink>
         <LocaleSwitcher />
-        <BoardAccountMenu />
       </div>
     </div>
   </nav>

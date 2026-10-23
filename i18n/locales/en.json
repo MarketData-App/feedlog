@@ -56,7 +56,8 @@
     "widget": "Widget",
     "featureRequests": "Feature Requests",
     "admin": "Admin",
-    "boardBar": "Feedback board"
+    "boardBar": "Feedback board",
+    "boardAdmin": "Board admin"
   },
   "board": {
     "boards": "Boards",
