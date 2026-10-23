@@ -1,3 +1,5 @@
+import { EMAIL_BOARD_NAME } from '../../utils/email-templates'
+
 // `auth` auto-imported from server/utils/better-auth.ts.
 
 export default defineEventHandler(async (event) => {
@@ -33,7 +35,7 @@ export default defineEventHandler(async (event) => {
   // Notify user that a password was added (security measure)
   await sendEmail({
     to: session.user.email,
-    subject: 'Password added to your FeedLog account',
+    subject: `Password added to your ${EMAIL_BOARD_NAME} account`,
     html: renderPasswordSetEmail({ name: session.user.name }),
   })
 

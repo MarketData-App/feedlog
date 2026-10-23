@@ -17,10 +17,11 @@ export interface EmailProvider {
 }
 
 // The From header for outgoing mail. EMAIL_FROM is either a bare address
-// ("noreply@example.com", shown as "FeedLog <...>") or a full header value
-// ("MarketData Roadmap <roadmap@contact.marketdata.app>"), which is kept as it
-// is: wrapping it again gives "FeedLog <Name <addr>>" and Resend refuses that.
-const FROM_DISPLAY_NAME = 'FeedLog'
+// ("noreply@example.com", shown as "Market Data Roadmap <...>") or a full header
+// value ("Market Data Roadmap <roadmap@contact.marketdata.app>"), which is kept as
+// it is: wrapping it again gives "Name <Name <addr>>" and Resend refuses that.
+// MarketData: the fallback display name is the board's sender name, not FeedLog.
+const FROM_DISPLAY_NAME = 'Market Data Roadmap'
 const FALLBACK_FROM_ADDRESS = 'onboarding@resend.dev'
 
 export function formatEmailFrom(emailFrom: string | undefined): string {

@@ -1,9 +1,14 @@
 // Email HTML templates — auto-imported by Nitro.
-// Brand primary color matches public/logo.svg.
 import { STATUS_CONFIG } from '../../shared/types/post'
 import { normalizeBrandHex, pickBrandForegroundHex } from '../../shared/utils/branding'
 
-const BRAND_COLOR = '#C45A46'
+// MarketData: the name, colour and contact in every email, in place of FeedLog's.
+// EMAIL_BOARD_NAME matches the board's page title ("<org> Feedback").
+export const EMAIL_BRAND = 'Market Data'
+export const EMAIL_BOARD_NAME = 'Market Data Feedback'
+const SUPPORT_EMAIL = 'support@marketdata.app'
+const SITE_URL = 'https://www.marketdata.app'
+const BRAND_COLOR = '#1447E6'
 const FONT_STACK = `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`
 
 export function renderInboxReplyEmail({ reply, productName, topic, url }: { reply: string; productName: string; topic: string; url?: string }) {
@@ -18,7 +23,7 @@ function layout({ preheader, content, brandName }: { preheader: string; content:
 <div style="font-family: ${FONT_STACK}; max-width: 600px; margin: 0 auto; padding: 32px 24px; color: #111827; line-height: 1.55;">
   <div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">${brandName ? escapeHtml(preheader) : preheader}</div>
   <div style="padding-bottom: 20px; border-bottom: 1px solid #e5e7eb; margin-bottom: 24px;">
-    <span style="font-size: 20px; font-weight: 700; color: ${BRAND_COLOR}; letter-spacing: -0.01em;">${brandName ? escapeHtml(brandName) : 'FeedLog'}</span>
+    <span style="font-size: 20px; font-weight: 700; color: ${BRAND_COLOR}; letter-spacing: -0.01em;">${escapeHtml(brandName || EMAIL_BRAND)}</span>
   </div>
   ${content}
   ${brandName ? `<p style="border-top: 1px solid #e5e7eb; padding-top: 20px; color: #6b7280; font-size: 13px;">&mdash; ${escapeHtml(brandName)} Support</p>` : signature()}
@@ -47,10 +52,10 @@ function expiryNote(text: string): string {
 function signature(): string {
   return `
 <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; color: #6b7280; font-size: 13px;">
-  &mdash; The FeedLog Team<br>
-  <a href="https://feedlog.ai" style="color: #6b7280; text-decoration: underline;">feedlog.ai</a>
+  &mdash; The ${EMAIL_BRAND} Team<br>
+  <a href="${SITE_URL}" style="color: #6b7280; text-decoration: underline;">marketdata.app</a>
   &middot;
-  <a href="mailto:feedlog.oss@outlook.com" style="color: #6b7280; text-decoration: underline;">feedlog.oss@outlook.com</a>
+  <a href="mailto:${SUPPORT_EMAIL}" style="color: #6b7280; text-decoration: underline;">${SUPPORT_EMAIL}</a>
 </div>
 `
 }
@@ -63,7 +68,7 @@ export function renderVerificationEmail({ url, name }: { url: string; name: stri
     content: `
 <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600;">Confirm your email to get started</h2>
 <p style="margin: 0 0 12px;">Hi ${escapeHtml(name)},</p>
-<p style="margin: 0 0 12px;">Confirm your email to activate your FeedLog account and start:</p>
+<p style="margin: 0 0 12px;">Confirm your email to activate your ${EMAIL_BOARD_NAME} account and start:</p>
 <ul style="margin: 0 0 24px; padding-left: 20px; color: #374151;">
   <li style="margin-bottom: 4px;">Voting on features you care about</li>
   <li style="margin-bottom: 4px;">Submitting feedback and ideas</li>
@@ -71,16 +76,16 @@ export function renderVerificationEmail({ url, name }: { url: string; name: stri
 </ul>
 ${actionButton(url, 'Confirm Email')}
 ${fallbackLink(url)}
-${expiryNote('This link expires in 1 hour. If you didn\'t sign up for FeedLog, you can safely ignore this email.')}
+${expiryNote(`This link expires in 1 hour. If you didn't sign up for ${EMAIL_BOARD_NAME}, you can safely ignore this email.`)}
 `,
   })
 }
 
 export function renderInvitationEmail({ url, orgName }: { url: string; orgName: string }): string {
   return layout({
-    preheader: `You're invited to join ${escapeHtml(orgName)} on FeedLog.`,
+    preheader: `You're invited to join ${escapeHtml(orgName)} on the feedback board.`,
     content: `
-<h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600;">Join ${escapeHtml(orgName)} on FeedLog</h2>
+<h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600;">Join ${escapeHtml(orgName)} on the feedback board</h2>
 <p style="margin: 0 0 12px;">You've been invited to collaborate. Click below to accept and get started:</p>
 ${actionButton(url, 'Accept invitation')}
 ${fallbackLink(url)}
@@ -95,7 +100,7 @@ export function renderResetPasswordEmail({ url, name }: { url: string; name: str
     content: `
 <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600;">Reset your password</h2>
 <p style="margin: 0 0 12px;">Hi ${escapeHtml(name)},</p>
-<p style="margin: 0 0 24px;">Someone requested a password reset for your FeedLog account. If this was you, click the button below to set a new password:</p>
+<p style="margin: 0 0 24px;">Someone requested a password reset for your ${EMAIL_BOARD_NAME} account. If this was you, click the button below to set a new password:</p>
 ${actionButton(url, 'Reset Password')}
 ${fallbackLink(url)}
 ${expiryNote('This link expires in 1 hour and can only be used once.')}
@@ -108,13 +113,13 @@ ${expiryNote('This link expires in 1 hour and can only be used once.')}
 }
 
 export function renderPasswordSetEmail({ name }: { name: string }): string {
-  const contact = `<a href="mailto:feedlog.oss@outlook.com" style="color: ${BRAND_COLOR}; text-decoration: underline;">feedlog.oss@outlook.com</a>`
+  const contact = `<a href="mailto:${SUPPORT_EMAIL}" style="color: ${BRAND_COLOR}; text-decoration: underline;">${SUPPORT_EMAIL}</a>`
   return layout({
     preheader: 'If this wasn\'t you, reset your password immediately.',
     content: `
 <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600;">A password was added to your account</h2>
 <p style="margin: 0 0 16px;">Hi ${escapeHtml(name)},</p>
-<p style="margin: 0 0 16px;">A password was just added to your FeedLog account. You can now sign in with email and password in addition to your social login.</p>
+<p style="margin: 0 0 16px;">A password was just added to your ${EMAIL_BOARD_NAME} account. You can now sign in with email and password in addition to your existing sign-in.</p>
 <p style="margin: 0 0 24px; color: #374151;">If this wasn't you, reset your password right away and contact ${contact}.</p>
 `,
   })
@@ -134,17 +139,17 @@ export interface NotificationEmailContent {
   text: string
 }
 
-const FOOTER_REASON = 'You\'re receiving this because of your activity on this FeedLog board.'
-const ADMIN_FOOTER_REASON = 'You\'re receiving this because you manage this FeedLog board.'
+const FOOTER_REASON = `You're receiving this because of your activity on ${EMAIL_BOARD_NAME}.`
+const ADMIN_FOOTER_REASON = `You're receiving this because you manage ${EMAIL_BOARD_NAME}.`
 
-// Gray page → centered FeedLog wordmark → white rounded card → centered footer.
+// Gray page → centered brand wordmark → white rounded card → centered footer.
 function notificationShell(cardInner: string, preheader: string, footerReason: string, preferencesUrl?: string): string {
   return `
 <div style="background: #f6f7fb; padding: 40px 16px; font-family: ${FONT_STACK};">
   <div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">${escapeHtml(preheader)}</div>
   <div style="max-width: 560px; margin: 0 auto;">
     <div style="text-align: center; padding-bottom: 28px;">
-      <span style="font-size: 22px; font-weight: 800; color: {{brand}}; letter-spacing: -0.02em;">FeedLog</span>
+      <span style="font-size: 22px; font-weight: 800; color: {{brand}}; letter-spacing: -0.02em;">${EMAIL_BRAND}</span>
     </div>
     <div style="background: #fff; border: 1px solid #eceef3; border-radius: 16px; padding: 40px 36px;">
 ${cardInner}

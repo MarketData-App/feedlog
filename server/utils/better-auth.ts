@@ -16,6 +16,7 @@ import { consola } from 'consola'
 import { mcpAuthPlugins } from '../mcp/auth-plugins'
 import { mcpEnabled, type mcpConfig } from '../mcp/config'
 import { cleanupMemberMcpAccess, cleanupOrganizationMcpAccess, cleanupUserMcpAccess } from '../mcp/grants'
+import { EMAIL_BOARD_NAME } from './email-templates'
 
 const logger = consola.withTag('auth')
 
@@ -72,7 +73,7 @@ const emailAndPassword = emailLoginEnabled
       sendResetPassword: async ({ user, url }: { user: { email: string; name: string }; url: string }) => {
         await sendEmail({
           to: user.email,
-          subject: 'Reset your FeedLog password',
+          subject: `Reset your ${EMAIL_BOARD_NAME} password`,
           html: renderResetPasswordEmail({ url, name: user.name }),
         })
       },
@@ -91,7 +92,7 @@ const emailVerification = hasEmailProvider
     sendVerificationEmail: async ({ user, url }: { user: { email: string; name: string }; url: string }) => {
       await sendEmail({
         to: user.email,
-        subject: 'Confirm your email to start using FeedLog',
+        subject: `Confirm your email for ${EMAIL_BOARD_NAME}`,
         html: renderVerificationEmail({ url, name: user.name }),
       })
     },
@@ -180,7 +181,7 @@ export function buildAuthConfig(overrides: AuthConfigOverrides = {}): BetterAuth
     const url = `${baseUrl}/invite?id=${data.id}`
     await sendEmail({
       to: data.email,
-      subject: `You're invited to join ${data.organization.name} on FeedLog`,
+      subject: `You're invited to join ${data.organization.name} on the feedback board`,
       html: renderInvitationEmail({ url, orgName: data.organization.name }),
     })
   }
