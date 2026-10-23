@@ -53,7 +53,10 @@
     "dashboard": "控制台",
     "editProfile": "编辑资料",
     "changePassword": "修改密码",
-    "widget": "反馈组件"
+    "widget": "反馈组件",
+    "featureRequests": "功能请求",
+    "admin": "管理后台",
+    "boardBar": "反馈看板"
   },
   "board": {
     "boards": "看板",

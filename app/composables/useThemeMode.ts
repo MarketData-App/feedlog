@@ -1,3 +1,5 @@
+import { THEME_COOKIE, kitThemeChoice, themeCookieDomain } from '~/utils/theme-cookie'
+
 export type ThemePref = 'system' | 'light' | 'dark'
 
 const ONE_YEAR = 60 * 60 * 24 * 365
@@ -15,6 +17,11 @@ let systemListenerAttached = false
 // the user hasn't chosen anything, BOTH surfaces fall back to the org's
 // configured defaultTheme. useState backs the reactive in-session truth; the
 // cookie persists across sessions and seeds SSR (no flash for light/dark).
+//
+// MarketData: the stored choice is the marketdata.app kit's `theme` cookie
+// (`dark` | `light`, absent = no choice), shared on .marketdata.app with the
+// website and the dashboard. The kit's toggle in the public header writes it
+// directly; app.vue folds those writes back into this state.
 export function useThemeMode() {
   const route = useRoute()
   const portal = usePortalOrg()
@@ -27,9 +34,10 @@ export function useThemeMode() {
     && !route.path.startsWith('/auth'))
   const themed = computed(() => isDashboard.value || isPortalSurface.value)
 
-  const cookieOpts = { maxAge: ONE_YEAR, sameSite: 'lax' as const, path: '/' }
-  const cookie = useCookie<ThemePref | null>('fl-theme', cookieOpts)
-  const stored = useState<ThemePref | null>('fl-theme', () => cookie.value ?? null)
+  const host = import.meta.server ? useRequestURL().host : window.location.host
+  const cookieOpts = { maxAge: ONE_YEAR, sameSite: 'lax' as const, path: '/', domain: themeCookieDomain(host) }
+  const cookie = useCookie<string | null>(THEME_COOKIE, cookieOpts)
+  const stored = useState<ThemePref | null>('fl-theme', () => kitThemeChoice(cookie.value))
 
   // The switcher's current value. Unset → fall back to the org's configured
   // default theme on every surface; once the user chooses, it applies app-wide.
@@ -40,7 +48,8 @@ export function useThemeMode() {
     },
     set(value) {
       stored.value = value
-      cookie.value = value
+      // The kit has no "system" value: following the OS is the absent cookie.
+      cookie.value = value === 'system' ? null : value
     },
   })
 

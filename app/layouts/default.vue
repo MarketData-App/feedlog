@@ -1,14 +1,11 @@
 <script setup lang="ts">
-import { resolveAttachmentUrl } from '~/utils/attachment'
+import { initHeader } from '@marketdataapp/ui/header-client'
+import { siteHeaderHtml } from '~/utils/site-header'
 
-const { signOut } = useAuth()
-const { data: session } = await useAuthSession()
-const localePath = useLocalePath()
+// Resolve the session before the guest check below reads it.
+await useAuthSession()
 
-const { isGuest, hasAccount, claimIfPending } = useGuestSession()
-// A guest is not an account. The header keeps offering sign-in and shows no
-// avatar or sign-out, because the visitor never created the identity behind it.
-const user = computed(() => isGuest.value ? undefined : session.value?.user)
+const { hasAccount, claimIfPending } = useGuestSession()
 
 // Fold in anything the visitor wrote as a guest. Silent — from their side
 // nothing happened, their feedback is simply still theirs.
@@ -20,212 +17,74 @@ const user = computed(() => isGuest.value ? undefined : session.value?.user)
 // next claims all over again. Claiming on load puts it in the realm that lives
 // long enough to finish, and every sign-in path ends in one.
 if (hasAccount.value) claimIfPending()
-// An SSO session carries its real member role inside its org, but may not change
-// the global user record — hence the password entry re-prompts.
-const isSsoSession = computed(
-  () => !!(session.value as { session?: { ssoOrgId?: string | null } } | null)?.session?.ssoOrgId,
-)
-const orgCtx = useOrgContext()
-// Matches the /dashboard middleware: any org member gets in, SSO included — its
-// orgList holds only the minting org, so a role here can only mean a role there.
-// Do NOT gate on `user.role === 'admin'`: legacy better-auth admin plugin field.
-const canEnterDashboard = computed(() => !!user.value && !!orgCtx.value.role)
 
-// User initials as avatar fallback
-const initials = computed(() => {
-  const name = user.value?.name || ''
-  return name.slice(0, 2).toUpperCase()
+const { isOpen: showLoginModal } = useLoginModal()
+
+// MarketData: the public pages wear the marketdata.app site header (the shared
+// kit, @marketdataapp/ui), so the board reads as a part of the website. Its
+// links all lead to www; the board's own navigation is the BoardBar below it.
+const config = useRuntimeConfig().public
+const route = useRoute()
+const requestUrl = useRequestURL()
+const websiteUrl = String(config.websiteUrl || 'https://www.marketdata.app').replace(/\/+$/, '')
+
+// The drawer's fallback "Log In" link: the dashboard login, which returns to
+// this page. The return address is refreshed at click time (onHeaderClick), as
+// the page may have changed since the header was rendered.
+function loginUrlFor(pageUrl: string): string {
+  const url = new URL(String(config.amemberLoginUrl))
+  url.searchParams.set('amember_redirect_url', pageUrl)
+  return url.href
+}
+
+// Rendered once per layout instance, on the server and identically during
+// hydration (no hash: the server never sees one). Never re-render it: a new
+// string would replace the header's DOM under the listeners initHeader binds,
+// and under the account control. No board path matches a www link, so the
+// path at setup time marks nothing that a later one would not.
+const headerHtml = siteHeaderHtml({
+  currentPath: route.path,
+  websiteOrigin: websiteUrl,
+  loginUrl: loginUrlFor(`${requestUrl.origin}${requestUrl.pathname}${requestUrl.search}`),
+  signupUrl: `${websiteUrl}/signup/`,
 })
 
-// Fall back to initials when avatar image fails to load
-const avatarError = ref(false)
-const avatarUrl = computed(() => resolveAttachmentUrl(user.value?.image))
-watch(user, () => { avatarError.value = false })
+const headerHost = ref<HTMLElement | null>(null)
 
-const { isOpen: showLoginModal, open: openLoginModal, ssoMode } = useLoginModal()
-// MarketData SSO mode: profile and password live in the customer's MarketData
-// account, so an SSO session gets no entry that leads to a form here.
-const showCredentialItems = computed(() => !(ssoMode && isSsoSession.value))
-const showChangePassword = ref(false)
-const showEditProfile = ref(false)
-
-// Kept visible and asking for a direct sign-in when used: hiding them reads as a
-// broken page to the people most likely to arrive this way.
-function onChangePassword() {
-  if (isSsoSession.value) {
-    openLoginModal(LOCAL_AUTH_REASON)
-    return
-  }
-  showChangePassword.value = true
+function onHeaderClick(event: MouseEvent) {
+  const link = (event.target as Element | null)?.closest?.('a')
+  if (!link) return
+  const login = new URL(String(config.amemberLoginUrl))
+  const target = new URL(link.href, window.location.href)
+  if (target.origin !== login.origin || target.pathname !== login.pathname) return
+  link.href = loginUrlFor(window.location.href)
 }
 
-function onEditProfile() {
-  if (isSsoSession.value) {
-    openLoginModal(LOCAL_AUTH_REASON)
-    return
-  }
-  showEditProfile.value = true
-}
-
-const portalOrg = usePortalOrg()
-const changelogUrl = useRuntimeConfig().public.changelogUrl as string | undefined
-const navItems = computed(() => [
-  { key: 'nav.feedback', to: '/', icon: 'lucide:message-square' },
-  { key: 'nav.roadmap', to: '/roadmap', icon: 'lucide:map' },
-  changelogUrl
-    ? { key: 'nav.changelog', to: changelogUrl, icon: 'lucide:newspaper', external: true }
-    : { key: 'nav.changelog', to: '/changelog', icon: 'lucide:newspaper', external: false },
-  ...(portalOrg.value.modules.helpCenter
-    ? [{ key: 'nav.helpCenter', to: '/help', icon: 'lucide:book-open' }]
-    : []),
-])
-
-async function handleSignOut() {
-  await signOut()
-  window.location.href = localePath('/')
-}
-
-// Mobile expandable nav
-const mobileNavOpen = ref(false)
-const route = useRoute()
-watch(() => route.path, () => { mobileNavOpen.value = false })
+let cleanupHeader: (() => void) | undefined
+onMounted(() => {
+  const root = headerHost.value?.querySelector<HTMLElement>('.site-header') ?? undefined
+  // userProfile: false — the board owns #user-profile (the header slot), so the
+  // header never renders into it or clears it. The board bar sits outside
+  // <main> and goes inert with it while the drawer is open.
+  cleanupHeader = initHeader({ root, userProfile: false, inert: 'main, footer, #board-bar' })
+  root?.addEventListener('click', onHeaderClick)
+})
+onBeforeUnmount(() => {
+  headerHost.value?.querySelector('.site-header')?.removeEventListener('click', onHeaderClick as EventListener)
+  cleanupHeader?.()
+})
 </script>
 
 <template>
   <div class="min-h-screen flex flex-col bg-background text-foreground font-body">
-    <!-- Top navigation bar -->
-    <header class="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-md w-full transition-colors duration-300">
-      <!-- Main bar -->
-      <div class="h-14 md:h-20 flex items-center justify-between px-4 md:px-6 lg:px-10">
-        <!-- Left: Hamburger (mobile) + Logo + Navigation (desktop) -->
-        <div class="flex items-center gap-3 md:gap-10">
-          <!-- Mobile hamburger -->
-          <button
-            class="md:hidden w-9 h-9 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors text-muted-foreground"
-            @click="mobileNavOpen = !mobileNavOpen"
-          >
-            <Icon :name="mobileNavOpen ? 'lucide:x' : 'lucide:menu'" size="20" />
-          </button>
-
-          <AppBrand />
-
-          <nav class="hidden md:flex items-center gap-8">
-            <NuxtLink
-              v-for="item in navItems"
-              :key="item.to"
-              :to="item.external ? item.to : localePath(item.to)"
-              class="flex items-center text-sm font-bold tracking-wide text-muted-foreground hover:text-foreground transition-colors"
-              active-class="!text-primary"
-            >
-              <Icon :name="item.icon" size="18" class="mr-2" />
-              {{ $t(item.key) }}
-            </NuxtLink>
-          </nav>
-        </div>
-
-        <!-- Right side -->
-        <div class="flex items-center gap-3 md:gap-4 lg:gap-6">
-          <ThemeSwitcher />
-          <LocaleSwitcher />
-
-          <!-- Dashboard link (admin only) -->
-          <!-- Desktop: button with text -->
-          <Button
-            v-if="canEnterDashboard"
-            as-child
-            variant="secondary"
-            class="hidden md:inline-flex"
-          >
-            <NuxtLink :to="localePath('/dashboard')">
-              <Icon name="lucide:layout-dashboard" size="18" />
-              {{ $t('nav.dashboard') }}
-            </NuxtLink>
-          </Button>
-          <!-- Mobile: icon only -->
-          <NuxtLink
-            v-if="canEnterDashboard"
-            :to="localePath('/dashboard')"
-            class="md:hidden w-9 h-9 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors text-muted-foreground"
-          >
-            <Icon name="lucide:layout-dashboard" size="20" />
-          </NuxtLink>
-
-          <!-- Logged in: Avatar + Dropdown menu -->
-          <DropdownMenu v-if="user">
-            <DropdownMenuTrigger as-child>
-              <button class="flex items-center rounded-full border border-border bg-card hover:border-primary transition-colors focus:outline-none p-1">
-                <Avatar class="w-8 h-8">
-                  <img v-if="avatarUrl && !avatarError" :src="avatarUrl" :alt="user.name" class="aspect-square size-full rounded-full object-cover" referrerpolicy="no-referrer" @error="avatarError = true">
-                  <!-- Brand accent (not a neutral gray) so identity chips carry the
-                       brand; derived in deriveBrandVars. -->
-                  <AvatarFallback v-else class="bg-accent text-accent-foreground text-sm font-bold">
-                    {{ initials }}
-                  </AvatarFallback>
-                </Avatar>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" class="w-48">
-              <DropdownMenuLabel class="font-normal">
-                <div class="flex flex-col space-y-1">
-                  <p class="text-sm font-medium">{{ user.name }}</p>
-                  <p class="text-xs text-muted-foreground truncate">{{ user.email }}</p>
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem v-if="showCredentialItems" @click="onEditProfile">
-                <Icon name="lucide:user-round-pen" size="16" class="mr-2" />
-                {{ $t('nav.editProfile') }}
-              </DropdownMenuItem>
-              <DropdownMenuItem v-if="showCredentialItems" @click="onChangePassword">
-                <Icon name="lucide:key-round" size="16" class="mr-2" />
-                {{ $t('nav.changePassword') }}
-              </DropdownMenuItem>
-              <DropdownMenuItem @click="handleSignOut">
-                <Icon name="lucide:log-out" size="16" class="mr-2" />
-                {{ $t('common.signOut') }}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <!-- Not logged in: Sign in button -->
-          <button
-            v-if="!user"
-            class="flex items-center gap-2 font-heading font-semibold text-sm px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
-            @click="openLoginModal()"
-          >
-            <Icon name="lucide:log-in" size="16" />
-            <span class="hidden sm:inline">{{ $t('common.signIn') }}</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Mobile expandable nav row -->
-      <div
-        class="md:hidden overflow-hidden transition-all duration-200 ease-in-out"
-        :style="{ maxHeight: mobileNavOpen ? '120px' : '0px' }"
-      >
-        <nav class="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 px-4 py-2.5 min-h-12 border-t border-border/50">
-          <NuxtLink
-            v-for="item in navItems"
-            :key="item.to"
-            :to="item.external ? item.to : localePath(item.to)"
-            class="flex items-center gap-1.5 text-sm font-bold text-muted-foreground hover:text-foreground transition-colors"
-            active-class="!text-primary"
-          >
-            <Icon :name="item.icon" size="16" />
-            {{ $t(item.key) }}
-          </NuxtLink>
-        </nav>
-      </div>
-    </header>
+    <!-- eslint-disable-next-line vue/no-v-html -- trusted kit markup, rendered from constants -->
+    <div ref="headerHost" class="contents" v-html="headerHtml" />
+    <BoardBar />
 
     <!-- Login modal (global, controlled via useLoginModal) -->
     <LoginModal v-model:open="showLoginModal" />
-    <ChangePasswordDialog v-model:open="showChangePassword" />
-    <EditProfileDialog v-model:open="showEditProfile" />
 
-    <!-- Page content (header is position:fixed, so add top padding equal to header height) -->
-    <main class="flex-1 w-full max-w-[1200px] mx-auto flex flex-col md:flex-row gap-8 px-4 md:px-6 lg:px-10 pt-20 md:pt-28 pb-6 md:pb-8">
+    <main id="main-content" class="flex-1 w-full max-w-[1200px] mx-auto flex flex-col md:flex-row gap-8 px-4 md:px-6 lg:px-10 pt-6 md:pt-8 pb-6 md:pb-8">
       <slot />
     </main>
   </div>

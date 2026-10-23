@@ -205,6 +205,12 @@ function openSubmit() {
   showSubmit.value = true
 }
 
+// MarketData: "New request" in the board bar, pressed here or on another page.
+const newRequest = useNewRequest()
+const takeNewRequest = () => newRequest.take(openSubmit)
+onMounted(takeNewRequest)
+watch(newRequest.pending, takeNewRequest)
+
 // Pre-filled submit links: /?new=1&title=...&body=...&b=...
 // This is the one entry point that opens the form to signed-out visitors — they
 // arrive holding a draft, so making them sign in first would throw it away.

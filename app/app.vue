@@ -2,6 +2,7 @@
 import { Toaster } from 'vue-sonner'
 import 'vue-sonner/style.css'
 import { derivePortalThemeVars, styleObjectToCss } from '#layers/feedlog/shared/utils/branding'
+import { DOCUMENT_THEME_SNIPPET, applyDocumentTheme, readThemeCookie } from '~/utils/theme-cookie'
 
 // Site-wide share-card defaults; per-page title/description come from usePageOg.
 // og:image must be absolute, so build it from the request origin.
@@ -30,8 +31,17 @@ const themeClass = computed(() => themed.value && mode.value === 'dark' ? 'dark'
 
 if (import.meta.client) {
   watchEffect(() => {
-    document.documentElement.classList.toggle('dark', resolvedDark.value)
+    applyDocumentTheme(document.documentElement, resolvedDark.value)
   })
+  // MarketData: the kit's toggle in the public header flips <html> and writes
+  // the shared `theme` cookie itself. Fold a new explicit choice back into the
+  // app state, so the board, its editors and the dashboard agree with the
+  // header. Keyed on the cookie, not on the class: an OS change in follow-OS
+  // mode also flips the class and must not become an explicit choice.
+  new MutationObserver(() => {
+    const choice = readThemeCookie(document.cookie)
+    if (choice && choice !== mode.value) mode.value = choice
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] })
 }
 
 useSeoMeta({
@@ -93,7 +103,7 @@ useHead(() => ({
   script: themed.value && mode.value === 'system'
     ? [{
         key: 'portal-system-theme',
-        innerHTML: "try{document.documentElement.classList.toggle('dark',window.matchMedia('(prefers-color-scheme: dark)').matches)}catch(e){}",
+        innerHTML: `try{(${DOCUMENT_THEME_SNIPPET})(window.matchMedia('(prefers-color-scheme: dark)').matches)}catch(e){}`,
       }]
     : [],
 }))

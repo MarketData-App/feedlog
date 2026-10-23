@@ -41,6 +41,9 @@ importers:
       '@codemirror/view':
         specifier: 6.40.0
         version: 6.40.0
+      '@marketdataapp/ui':
+        specifier: github:MarketDataApp/ui#v5.10.1
+        version: https://codeload.github.com/MarketDataApp/ui/tar.gz/9f6c23c54fcc9c9069b7b1374f259b138a55487c
       '@mastra/ai-sdk':
         specifier: 1.10.3
         version: 1.10.3(@mastra/core@1.67.0(ai@7.0.105(zod@4.3.6))(zod@4.3.6))(zod@4.3.6)
@@ -234,12 +237,12 @@ importers:
       '@iconify-json/logos':
         specifier: ^1.2.16
         version: 1.2.16
-      '@iconify-json/mdi':
-        specifier: ^1.2.3
-        version: 1.2.3
       '@iconify-json/lucide':
         specifier: ^1.2.102
         version: 1.2.102
+      '@iconify-json/mdi':
+        specifier: ^1.2.3
+        version: 1.2.3
       '@modelcontextprotocol/client':
         specifier: 2.2.0
         version: 2.2.0
@@ -1285,11 +1288,11 @@ packages:
   '@iconify-json/logos@1.2.16':
     resolution: {integrity: sha512-J7uewTzmJchaWkc8f/SW3aS14Y6H1bnLihMZaVccDao3TRsWFJvGfAhbkTzErKjSSbRJG8uzjY4yzMbGMELPIw==}
 
-  '@iconify-json/mdi@1.2.3':
-    resolution: {integrity: sha512-O3cLwbDOK7NNDf2ihaQOH5F9JglnulNDFV7WprU2dSoZu3h3cWH//h74uQAB87brHmvFVxIOkuBX2sZSzYhScg==}
-
   '@iconify-json/lucide@1.2.102':
     resolution: {integrity: sha512-Dm3EEqu5NrmzyDMB2U1+8yroEj2/dB9V4KlH0m/szwwF/ofSf0cPaGTZqkd1aExXjCor+vU53ttRMCGuXf+/cg==}
+
+  '@iconify-json/mdi@1.2.3':
+    resolution: {integrity: sha512-O3cLwbDOK7NNDf2ihaQOH5F9JglnulNDFV7WprU2dSoZu3h3cWH//h74uQAB87brHmvFVxIOkuBX2sZSzYhScg==}
 
   '@iconify/collections@1.0.658':
     resolution: {integrity: sha512-u7ydr+1Cf+2p4iJ/2QmKNXix9Dc9XKRTN48LrultZ5aHLAKc5XRW8XbN0SxeJHd+8P8iVa7FmNSwIsIubsJ2oQ==}
@@ -1615,6 +1618,10 @@ packages:
 
   '@marijn/find-cluster-break@1.0.2':
     resolution: {integrity: sha512-l0h88YhZFyKdXIFNfSWpyjStDjGHwZ/U7iobcK1cQQD8sejsONdQtTVU+1wVN1PBw40PiiHB1vA5S7VTfQiP9g==}
+
+  '@marketdataapp/ui@https://codeload.github.com/MarketDataApp/ui/tar.gz/9f6c23c54fcc9c9069b7b1374f259b138a55487c':
+    resolution: {tarball: https://codeload.github.com/MarketDataApp/ui/tar.gz/9f6c23c54fcc9c9069b7b1374f259b138a55487c}
+    version: 5.10.1
 
   '@mastra/ai-sdk@1.10.3':
     resolution: {integrity: sha512-YhME7yHqftQtADD9Oph1XQADAzlmovCSfj0bkoXvcH8Z0a35YBePumJJtJqafs77Jd6ie6ZtXoDNVWAba/HDPQ==}
@@ -8938,11 +8945,11 @@ snapshots:
     dependencies:
       '@iconify/types': 2.0.0
 
-  '@iconify-json/mdi@1.2.3':
+  '@iconify-json/lucide@1.2.102':
     dependencies:
       '@iconify/types': 2.0.0
 
-  '@iconify-json/lucide@1.2.102':
+  '@iconify-json/mdi@1.2.3':
     dependencies:
       '@iconify/types': 2.0.0
 
@@ -9249,6 +9256,8 @@ snapshots:
       - supports-color
 
   '@marijn/find-cluster-break@1.0.2': {}
+
+  '@marketdataapp/ui@https://codeload.github.com/MarketDataApp/ui/tar.gz/9f6c23c54fcc9c9069b7b1374f259b138a55487c': {}
 
   '@mastra/ai-sdk@1.10.3(@mastra/core@1.67.0(ai@7.0.105(zod@4.3.6))(zod@4.3.6))(zod@4.3.6)':
     dependencies:

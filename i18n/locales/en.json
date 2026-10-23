@@ -53,7 +53,10 @@
     "dashboard": "Dashboard",
     "editProfile": "Edit Profile",
     "changePassword": "Change Password",
-    "widget": "Widget"
+    "widget": "Widget",
+    "featureRequests": "Feature Requests",
+    "admin": "Admin",
+    "boardBar": "Feedback board"
   },
   "board": {
     "boards": "Boards",

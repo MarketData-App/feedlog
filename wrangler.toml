@@ -125,3 +125,11 @@ NOINDEX = "true"
 NUXT_PUBLIC_SSO_LOGIN_URL = "https://dashboard-staging.marketdata.app/marketdata/misc/feedlog-sso"
 # The changelog lives on the website: nav links there, /changelog redirects there.
 NUXT_PUBLIC_CHANGELOG_URL = "https://www.marketdata.app/changelog/"
+# The marketdata.app site header on public pages: navigation, logo link and
+# sign-up go to the website; the account control asks staging aMember who is
+# logged in. Production: the same paths on https://dashboard.marketdata.app.
+NUXT_PUBLIC_WEBSITE_URL = "https://www.marketdata.app"
+NUXT_PUBLIC_AMEMBER_API_URL = "https://dashboard-staging.marketdata.app/api/user/"
+NUXT_PUBLIC_AMEMBER_LOGIN_URL = "https://dashboard-staging.marketdata.app/marketdata/login"
+NUXT_PUBLIC_AMEMBER_LOGOUT_URL = "https://dashboard-staging.marketdata.app/marketdata/logout"
+NUXT_PUBLIC_AMEMBER_SIGNUP_URL = "https://dashboard-staging.marketdata.app/marketdata/signup"

@@ -103,6 +103,8 @@ export default defineNuxtConfig({
     // and vercel presets where NuxtHub's R2 / Vercel Blob driver applies.
     resolver.resolve('./modules/blob-s3/module'),
     resolver.resolve('./modules/widget-preload/module'),
+    // MarketData: the kit site header's CSS, cut from @marketdataapp/ui.
+    resolver.resolve('./modules/site-header-css/module'),
   ],
   shadcn: {
     prefix: '',
@@ -190,6 +192,10 @@ export default defineNuxtConfig({
   },
 
   vite: {
+    // MarketData: the kit's client modules, prebundled up front in dev.
+    optimizeDeps: {
+      include: ['@marketdataapp/ui/header-client'],
+    },
     ssr: {
       // PostCSS uses nanoid's CommonJS entry through sanitize-html. Bundle it
       // before Nitro can resolve the flattened import to the ESM-only version.
@@ -245,6 +251,15 @@ export default defineNuxtConfig({
       // External changelog (MarketData: the website). When set, the nav links
       // there and /changelog redirects there. Runtime: NUXT_PUBLIC_CHANGELOG_URL.
       changelogUrl: process.env.NUXT_PUBLIC_CHANGELOG_URL || '',
+      // MarketData site header and account control (public pages). The website
+      // origin: header navigation, logo link, sign-up. The aMember dashboard:
+      // who is logged in (/api/user/), log in, log out, sign up. Defaults are
+      // production; staging sets NUXT_PUBLIC_* Worker vars (wrangler.toml).
+      websiteUrl: process.env.NUXT_PUBLIC_WEBSITE_URL || 'https://www.marketdata.app',
+      amemberApiUrl: process.env.NUXT_PUBLIC_AMEMBER_API_URL || 'https://dashboard.marketdata.app/api/user/',
+      amemberLoginUrl: process.env.NUXT_PUBLIC_AMEMBER_LOGIN_URL || 'https://dashboard.marketdata.app/marketdata/login',
+      amemberLogoutUrl: process.env.NUXT_PUBLIC_AMEMBER_LOGOUT_URL || 'https://dashboard.marketdata.app/marketdata/logout',
+      amemberSignupUrl: process.env.NUXT_PUBLIC_AMEMBER_SIGNUP_URL || 'https://dashboard.marketdata.app/marketdata/signup',
     },
   },
 })

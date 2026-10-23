@@ -14,7 +14,7 @@ function openPostDetail(item: PostListItem) {
 </script>
 
 <template>
-  <div class="flex-1 flex flex-col min-w-0 max-h-[calc(100vh-5rem)] min-h-[500px]">
+  <div class="flex-1 flex flex-col min-w-0 max-h-[calc(100vh-9.5rem)] md:max-h-[calc(100vh-10.5rem)] min-h-[500px]">
     <!-- Title area -->
     <div class="pb-3 md:pb-6">
       <div class="flex items-baseline gap-3">

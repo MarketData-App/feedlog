@@ -5,7 +5,7 @@ export function useAuth() {
 }
 
 // better-auth session response type
-interface AuthSession {
+export interface AuthSession {
   user: {
     id: string
     name: string
