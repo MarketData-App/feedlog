@@ -1,5 +1,6 @@
 // Email sending abstraction — Registry pattern
 // Auto-imported by Nitro, available in all server/ code
+import { filterAllowedRecipients, recipientDomain } from './email-allowlist'
 
 export interface SendEmailOptions {
   to: string
@@ -41,5 +42,14 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
   // Defense-in-depth: a subject is a single header line, so collapse any CR/LF —
   // a subject carrying user data (post title, org name) can't inject extra headers.
   const subject = options.subject.replace(/[\r\n]+/g, ' ')
-  await resolveEmailProvider().send({ ...options, subject })
+  // Every send path (auth, notifications, invitations, inbox) ends here, so the
+  // EMAIL_ALLOWED_DOMAINS allowlist is applied once, before any provider runs.
+  const { send, dropped } = filterAllowedRecipients(options.to, process.env.EMAIL_ALLOWED_DOMAINS)
+  if (dropped.length > 0) {
+    // Log the count and the domains only, never the addresses.
+    const domains = [...new Set(dropped.map(recipientDomain))].join(',')
+    console.warn(`[email] Email dropped by EMAIL_ALLOWED_DOMAINS count=${dropped.length} domains=${domains}`)
+  }
+  if (send.length === 0) return
+  await resolveEmailProvider().send({ ...options, to: send[0]!, subject })
 }
