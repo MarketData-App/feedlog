@@ -42,7 +42,10 @@ const avatarError = ref(false)
 const avatarUrl = computed(() => resolveAttachmentUrl(user.value?.image))
 watch(user, () => { avatarError.value = false })
 
-const { isOpen: showLoginModal, open: openLoginModal } = useLoginModal()
+const { isOpen: showLoginModal, open: openLoginModal, ssoMode } = useLoginModal()
+// MarketData SSO mode: profile and password live in the customer's MarketData
+// account, so an SSO session gets no entry that leads to a form here.
+const showCredentialItems = computed(() => !(ssoMode && isSsoSession.value))
 const showChangePassword = ref(false)
 const showEditProfile = ref(false)
 
@@ -166,11 +169,11 @@ watch(() => route.path, () => { mobileNavOpen.value = false })
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem @click="onEditProfile">
+              <DropdownMenuItem v-if="showCredentialItems" @click="onEditProfile">
                 <Icon name="lucide:user-round-pen" size="16" class="mr-2" />
                 {{ $t('nav.editProfile') }}
               </DropdownMenuItem>
-              <DropdownMenuItem @click="onChangePassword">
+              <DropdownMenuItem v-if="showCredentialItems" @click="onChangePassword">
                 <Icon name="lucide:key-round" size="16" class="mr-2" />
                 {{ $t('nav.changePassword') }}
               </DropdownMenuItem>

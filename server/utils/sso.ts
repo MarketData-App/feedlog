@@ -4,6 +4,7 @@ import { jwtVerify } from 'jose'
 import { eq } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 import { user } from '../db/schemas'
+import { isSystemAdminEmail } from './signup-allowlist'
 
 // Product-SSO helpers: verify the customer-signed HS256 JWT, resolve the
 // asserted identity to a user row, guard the return_to target against open
@@ -58,9 +59,15 @@ export async function verifySsoJwt(token: string, secrets: string[]): Promise<Ss
   // column; fall back to the email when the org omits it. All other claims are
   // ignored (no custom-field mechanism).
   // A reserved .invalid address (importer placeholders, guest accounts) never
-  // belongs to a real person, so no org may sign in as one.
+  // belongs to a real person, so no org may sign in as one. A board admin
+  // (SYSTEM_ADMIN_EMAILS) signs in only with a password: an SSO session for that
+  // address would make whoever controls it in the customer's product the owner.
   const email = payload.email
-  if (typeof email !== 'string' || !email.includes('@') || isReservedEmail(email)) {
+  if (
+    typeof email !== 'string' || !email.includes('@')
+    || isReservedEmail(email)
+    || isSystemAdminEmail(email, process.env.SYSTEM_ADMIN_EMAILS)
+  ) {
     throw createError({ statusCode: 400, message: 'SSO token must carry a valid email claim' })
   }
   const normalizedEmail = email.trim().toLowerCase()
