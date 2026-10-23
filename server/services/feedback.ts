@@ -4,6 +4,7 @@ import type { z } from 'zod'
 import { board, comment, commentLike, conversation, message, post, postSearch, postSubscription, postUnread, vote } from '../db/schemas'
 import { createPostSchema, updatePostSchema } from '../../shared/schemas/post'
 import { createPostRecord } from '../utils/post-create'
+import { isVotingClosed } from '../../shared/types/post'
 import { contentError, isModerator, requireModerator, type ContentReader, type ContentContext } from './content-context'
 
 export async function feedbackRecord(context: ContentReader, id: string) {
@@ -79,6 +80,7 @@ export async function setFeedbackVote(context: ContentContext, id: string, voted
   await lockFeedback(context)
   const existing = await feedbackRecord(context, id)
   if (voted && existing.mergedTo) throw contentError(403, 'Cannot vote on merged feedback')
+  if (voted && isVotingClosed(existing.status, existing.mergedTo)) throw contentError(403, 'Cannot vote on closed feedback')
   if (voted) {
     const changed = await context.db.insert(vote).values({ postId: id, userId: context.userId }).onConflictDoNothing().returning()
     if (!changed.length) return { voted, voteCount: existing.voteCount }

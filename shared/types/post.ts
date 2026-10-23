@@ -1,5 +1,5 @@
 // Post status enum
-export const POST_STATUSES = ['open', 'planned', 'in_progress', 'done'] as const
+export const POST_STATUSES = ['open', 'planned', 'in_progress', 'done', 'closed'] as const
 export type PostStatus = typeof POST_STATUSES[number]
 
 // The board's default view: work that is still live. 'done' is the only status
@@ -48,6 +48,7 @@ export const STATUS_CONFIG: Record<PostStatus, StatusConfig> = {
   planned: { label: 'Planned', color: '#3b82f6', cssVar: '--status-planned' },
   in_progress: { label: 'In Progress', color: '#f59e0b', cssVar: '--status-in-progress' },
   done: { label: 'Completed', color: '#22c55e', cssVar: '--status-done' },
+  closed: { label: 'Closed', color: '#6b7280', cssVar: '--status-closed' },
 }
 
 /** Status options as array (useful for dropdowns / selectors) */
@@ -55,6 +56,11 @@ export const STATUS_OPTIONS = POST_STATUSES.map(s => ({
   value: s,
   ...STATUS_CONFIG[s],
 }))
+
+/** A closed or merged post takes no new votes. */
+export function isVotingClosed(status: string, mergedTo: string | null): boolean {
+  return status === 'closed' || !!mergedTo
+}
 
 export function statusLabelKey(status: string): string {
   return `status.${status in STATUS_CONFIG ? status : 'open'}`

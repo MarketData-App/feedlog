@@ -29,7 +29,8 @@
     "open": "开放",
     "planned": "计划中",
     "in_progress": "进行中",
-    "done": "已完成"
+    "done": "已完成",
+    "closed": "已关闭"
   },
   "time": {
     "justNow": "刚刚",

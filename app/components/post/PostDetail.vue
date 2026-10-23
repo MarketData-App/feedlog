@@ -217,7 +217,7 @@ async function handleSimilarMerge(direction: 'bring' | 'push', targetPost: any) 
 // ---- Vote handler ----
 async function handleVote() {
   if (!post.value) return
-  if (isMerged.value) return // Block voting on merged posts
+  if (isMerged.value || post.value.status === 'closed') return // Block voting on merged and closed posts
   if (!await ensureIdentity('allowVote')) return
   const p = post.value
   const settled = p.hasVoted ? store.unvote(props.slug) : store.vote(props.slug)
@@ -392,11 +392,12 @@ async function handleShare() {
           <div v-if="!isMerged" class="flex flex-row md:flex-col items-center gap-3 shrink-0">
             <button
               class="upvote-btn w-14 h-[72px] rounded-md flex flex-col items-center justify-center gap-1 shadow-md border transition-transform hover:scale-105"
-              :class="post.hasVoted
+              :class="[post.status === 'closed' ? 'opacity-50 cursor-not-allowed' : '', post.hasVoted
                 ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-background text-foreground border-border hover:border-primary hover:text-primary'"
+                : 'bg-background text-foreground border-border hover:border-primary hover:text-primary']"
               data-fdl-action="feedback_vote"
               data-fdl-source="detail"
+              :disabled="post.status === 'closed'"
               @click="handleVote"
             >
               <Icon name="lucide:chevron-up" size="28" />
