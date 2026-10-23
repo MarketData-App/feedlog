@@ -23,6 +23,7 @@ const {
   buildLoginHref,
   classifyUserResponse,
   decideHandoff,
+  editableText,
   fetchDashboardUserWith,
   headerLinkAction,
   holdsTypedText,
@@ -739,4 +740,25 @@ test('fetchDashboardUserWith: a cancel ends the question at once as unknown', as
   assert.deepEqual(await pending, { kind: 'unknown' })
   assert.ok(Date.now() - started < 1000)
   assert.equal(seen.init?.signal?.aborted, true)
+})
+
+// Fix 2, found by the e2e: the comment editor is CodeMirror. Its empty
+// contenteditable holds a placeholder widget (contenteditable=false) with
+// text; that is not typed text.
+const TEXT = 3
+const ELEMENT = 1
+const el = (editable: boolean, ...childNodes: object[]) => ({ nodeType: ELEMENT, isContentEditable: editable, childNodes })
+const txt = (nodeValue: string) => ({ nodeType: TEXT, nodeValue })
+
+test('editableText: a CodeMirror placeholder widget is not text the visitor typed', () => {
+  const emptyCodeMirror = el(true, el(true, el(false), el(false, txt('Leave a comment (Markdown)')), el(true)))
+  assert.equal(editableText(emptyCodeMirror), '')
+  assert.equal(holdsTypedText([{ tagName: 'DIV', isContentEditable: true, text: editableText(emptyCodeMirror) }]), false)
+  const typed = el(true, el(true, txt('Please add '), el(true, txt('IV rank'))))
+  assert.equal(editableText(typed), 'Please add IV rank')
+  assert.equal(holdsTypedText([{ tagName: 'DIV', isContentEditable: true, text: editableText(typed) }]), true)
+  // tiptap's placeholder is CSS only: an empty paragraph has no text.
+  assert.equal(editableText(el(true, el(true, el(true)))), '')
+  // Comments and other node kinds add nothing.
+  assert.equal(editableText(el(true, { nodeType: 8, nodeValue: 'comment' }, txt('x'))), 'x')
 })

@@ -5,6 +5,7 @@ import {
   HANDOFF_TIMEOUT_MS,
   boardSessionFor,
   buildLoginHref,
+  editableText,
   fetchDashboardUserWith,
   headerLinkAction,
   holdsTypedText,
@@ -196,7 +197,7 @@ export function useAmemberSession() {
         isContentEditable: el.isContentEditable,
         value: typeof field.value === 'string' ? field.value : null,
         defaultValue: typeof field.defaultValue === 'string' ? field.defaultValue : null,
-        text: el.isContentEditable ? el.textContent : null,
+        text: el.isContentEditable ? editableText(el) : null,
       }
     })
   }

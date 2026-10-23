@@ -310,6 +310,27 @@ export function isTextEntry(el: EditableView | null | undefined): boolean {
   return false
 }
 
+/** What editableText reads of a DOM node. */
+export interface NodeView {
+  nodeType: number
+  nodeValue?: string | null
+  isContentEditable?: boolean | null
+  childNodes?: ArrayLike<NodeView>
+}
+
+// The text a visitor can have typed into a contenteditable element: its text
+// nodes, without the parts that are not editable. The comment editor is
+// CodeMirror; when empty, it holds a placeholder widget (contenteditable=false)
+// with text, which is not typed text.
+export function editableText(node: NodeView): string {
+  if (node.nodeType === 3) return node.nodeValue ?? ''
+  if (node.nodeType !== 1 || node.isContentEditable !== true) return ''
+  let text = ''
+  const children = node.childNodes ?? []
+  for (let i = 0; i < children.length; i++) text += editableText(children[i]!)
+  return text
+}
+
 // Whether a field on the page holds text the visitor typed: a text field or a
 // textarea whose value differs from what the server rendered, or a
 // contenteditable element with text.
