@@ -332,7 +332,7 @@
     "checkEmail": "Check your email",
     "localAuthRequired": "You're signed in through {org}. This action needs a direct sign-in.",
     "localAuthTitle": "Sign in directly",
-    "ssoAccountManaged": "Manage your profile and password in your MarketData account.",
+    "ssoAccountManaged": "Manage your profile and password in your Market Data account.",
     "backToSignIn": "← Back to sign in",
     "signingIn": "Signing in...",
     "fields": {

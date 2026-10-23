@@ -51,7 +51,7 @@ export function signupAllowlist(): BetterAuthPlugin {
           handler: createAuthMiddleware(async (context) => {
             if (!isSignupAllowed(bodyEmail(context.body), process.env.SYSTEM_ADMIN_EMAILS)) {
               throw new APIError('FORBIDDEN', {
-                message: 'Sign-up is closed. Sign in with your MarketData account.',
+                message: 'Sign-up is closed. Sign in with your Market Data account.',
                 code: 'SIGNUP_NOT_ALLOWED',
               })
             }

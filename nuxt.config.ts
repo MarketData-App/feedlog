@@ -65,9 +65,10 @@ export default defineNuxtConfig({
       // tags by union, so any hint here would leak onto the override and
       // mislabel a logo of a different format. The browser sniffs the served
       // content-type either way.
+      // MarketData: the official icons, the same files as www.marketdata.app.
       link: [
-        { key: 'favicon-svg', rel: 'icon', href: '/logo.svg' },
-        { key: 'favicon-png', rel: 'icon', href: '/favicon.png' },
+        { key: 'favicon-svg', rel: 'icon', href: '/favicon.svg' },
+        { key: 'favicon-png', rel: 'icon', href: '/favicon-96x96.png' },
         { key: 'favicon-ico', rel: 'shortcut icon', href: '/favicon.ico' },
         { key: 'favicon-apple', rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
       ],
@@ -75,7 +76,8 @@ export default defineNuxtConfig({
   },
 
   site: {
-    name: 'FeedLog',
+    // MarketData: the schema.org WebSite name that search engines read.
+    name: 'Market Data',
   },
 
   components: [
@@ -106,6 +108,8 @@ export default defineNuxtConfig({
     // MarketData: the kit site header's CSS, cut from @marketdataapp/ui.
     resolver.resolve('./modules/site-header-css/module'),
   ],
+  // MarketData: the board's look, matched to www.marketdata.app.
+  css: [resolver.resolve('./app/assets/css/marketdata.css')],
   shadcn: {
     prefix: '',
     componentDir: resolver.resolve('./app/components/ui'),
@@ -123,14 +127,11 @@ export default defineNuxtConfig({
     strategy: 'prefix_except_default',
     defaultLocale: 'en',
     vueI18n: 'i18n.config.ts',
-    detectBrowserLanguage: {
-      useCookie: true,
-      cookieKey: 'feedlog_locale',
-      redirectOn: 'root',
-    },
+    // MarketData: English only. No browser-language redirect, no /zh pages.
+    // zh.json stays in the tree for `pnpm i18n:check` and upstream merges.
+    detectBrowserLanguage: false,
     locales: [
       { code: 'en', language: 'en-US', name: 'English', file: 'en.json' },
-      { code: 'zh', language: 'zh-CN', name: '中文', file: 'zh.json' },
     ],
   },
   hub: {

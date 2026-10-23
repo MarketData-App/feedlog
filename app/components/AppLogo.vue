@@ -9,7 +9,7 @@ withDefaults(defineProps<{
 <template>
   <img
     src="/logo.svg"
-    alt="FeedLog"
+    alt="Market Data"
     :width="size"
     :height="size"
     class="shrink-0"

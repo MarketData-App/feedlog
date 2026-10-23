@@ -8,8 +8,8 @@ import { formatEmailFrom } from '../server/utils/email'
 
 test('keeps a full "Name <address>" value as it is', () => {
   assert.equal(
-    formatEmailFrom('MarketData Roadmap <roadmap@contact.marketdata.app>'),
-    'MarketData Roadmap <roadmap@contact.marketdata.app>',
+    formatEmailFrom('Market Data Roadmap <roadmap@contact.marketdata.app>'),
+    'Market Data Roadmap <roadmap@contact.marketdata.app>',
   )
   assert.equal(formatEmailFrom('  Team <a@b.example>  '), 'Team <a@b.example>')
 })

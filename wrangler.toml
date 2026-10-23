@@ -112,7 +112,7 @@ crons = ["0 3 * * *"]
 
 [env.staging.vars]
 BETTER_AUTH_URL = "https://roadmap-staging.marketdata.app"
-EMAIL_FROM = "MarketData Roadmap <roadmap@contact.marketdata.app>"
+EMAIL_FROM = "Market Data Roadmap <roadmap@contact.marketdata.app>"
 AUTH_EMAIL_ENABLED = "true"
 # contact.marketdata.app is a send-only domain: no email verification on staging.
 AUTH_EMAIL_VERIFY = "false"
