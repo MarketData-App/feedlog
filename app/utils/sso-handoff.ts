@@ -18,8 +18,10 @@ import { buildSsoLoginUrl } from './sso-login-url'
 //
 // A redirect or a reload must never take typed text away: the flow skips them
 // while a text field is in use or holds typed text, and on a page that has been
-// open longer than 15 s (mayNavigateAway); the next page load tries again. The
-// flow stops when the layout unmounts (the signal).
+// open longer than 15 s (mayNavigateAway); the next page load tries again. A
+// sign-out is not a navigation and always runs: the guard never keeps a board
+// session the dashboard disagrees with. The flow stops when the layout
+// unmounts (the signal).
 //
 // Everything here is pure so the rules can be tested without a browser.
 
@@ -342,7 +344,7 @@ export type HandoffOutcome =
   | 'signed-out'
   | 'redirected'
   | 'failed'
-  /** A step that ends in a redirect or a reload waited for the next page load (mayNavigate). */
+  /** A redirect, or a switch's handoff to the new account, waited for the next page load (mayNavigate). */
   | 'deferred'
   /** The layout unmounted; nothing more was done. */
   | 'cancelled'
@@ -394,25 +396,29 @@ export async function runHandoffFlow(deps: HandoffDeps): Promise<HandoffOutcome>
     iframeFailed: false,
   })
   if (step === 'signout') {
-    // The logout sync ends in a reload: not now if the visitor types or the
-    // page is old. The session stays until the next page load.
-    if (!deps.mayNavigate()) return 'deferred'
+    // The sign-out always runs (a request, not a navigation): a session the
+    // dashboard does not hold must not go on acting. Only the reload after it
+    // waits for the guard; without it, the empty session is read in place
+    // (account → nobody re-syncs the per-viewer flags, no reload).
     if (!(await deps.signOutBoard())) return 'failed'
     if (cancelled()) return 'cancelled'
-    // Asked again: the sign-out took time. Without the reload, the empty
-    // session is read in place (the per-viewer flags re-sync).
     if (deps.mayNavigate()) await deps.afterSignOut()
     else await deps.refreshInPlace()
     return 'signed-out'
   }
   let switched = false
   if (step === 'switch') {
-    // A switch ends in a reload (one account replaces another), or in the
-    // logout reload when it cannot finish: the same guard.
-    if (!deps.mayNavigate()) return 'deferred'
-    // The old account's session ends before the new one is fetched.
+    // The old account's session always ends first, guard or not: typed text
+    // (even a form a sign-in link pre-filled) must not keep account A acting.
     if (!(await deps.signOutBoard())) return 'failed'
     if (cancelled()) return 'cancelled'
+    // The handoff to the new account ends in a reload (one account replaces
+    // another): while the visitor types or the page is old, read the empty
+    // session in place and leave the new sign-in to the next page load.
+    if (!deps.mayNavigate()) {
+      await deps.refreshInPlace()
+      return 'deferred'
+    }
     switched = true
     step = 'iframe'
   }

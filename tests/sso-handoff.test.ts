@@ -578,16 +578,53 @@ test('runHandoffFlow: the fallback redirect is skipped while the guard says no, 
   assert.equal(storage.getItem('feedlog:sso-redirected'), null)
 })
 
-test('runHandoffFlow: the logout sync is skipped while the guard says no (no sign-out, no reload)', async () => {
+// Fix 2 (re-review, security): the guard never keeps a session the dashboard
+// disagrees with. The sign-out is a request, not a navigation: it always runs.
+// Only the reload, and the handoff to the new account, wait.
+test('runHandoffFlow: guarded logout sync → the board session still ends, read in place, no reload', async () => {
   const { deps, calls } = flow({ board: ssoA, dashboard: { kind: 'none' }, mayNavigate: () => false })
-  assert.equal(await runHandoffFlow(deps), 'deferred')
-  assert.deepEqual(calls, ['fetch'])
+  assert.equal(await runHandoffFlow(deps), 'signed-out')
+  assert.deepEqual(calls, ['fetch', 'signout', 'refresh'])
 })
 
-test('runHandoffFlow: an account switch (it ends in a reload) is skipped while the guard says no', async () => {
-  const { deps, calls } = flow({ board: ssoA, mayNavigate: () => false })
+test('runHandoffFlow: guarded account switch → the old account is signed out, no handoff for the new one, no reload', async () => {
+  const { deps, calls, storage } = flow({ board: ssoA, mayNavigate: () => false })
   assert.equal(await runHandoffFlow(deps), 'deferred')
-  assert.deepEqual(calls, ['fetch'])
+  assert.deepEqual(calls, ['fetch', 'signout', 'refresh'])
+  assert.equal(storage.getItem('feedlog:sso-redirected'), null)
+})
+
+test('runHandoffFlow: a planted session cannot hide behind typed text (pre-filled composer, switch)', async () => {
+  // A sign-in link for account A with return_to=/?new=1&title=x opens the
+  // composer with a title: the guard says no from the start. A must still end.
+  let board: { ssoOrgId: string | null, email: string | null } | null = ssoA
+  const { deps, calls } = flow({
+    boardSession: () => board,
+    mayNavigate: () => false,
+    signOutBoard: async () => { calls.push('signout'); board = null; return true },
+    refreshInPlace: async () => { calls.push('refresh') },
+  })
+  assert.equal(await runHandoffFlow(deps), 'deferred')
+  assert.equal(board, null, 'account A is signed out')
+  assert.ok(!calls.includes('iframe') && !calls.includes('after-signout'))
+})
+
+test('runHandoffFlow: guarded switch whose sign-out fails stops there', async () => {
+  const { deps, calls } = flow({ board: ssoA, mayNavigate: () => false, signOutBoard: async () => { calls.push('signout'); return false } })
+  assert.equal(await runHandoffFlow(deps), 'failed')
+  assert.deepEqual(calls, ['fetch', 'signout'])
+})
+
+test('runHandoffFlow: guarded switch cancelled during the sign-out → nothing more', async () => {
+  const controller = new AbortController()
+  const { deps, calls } = flow({
+    board: ssoA,
+    mayNavigate: () => false,
+    signal: controller.signal,
+    signOutBoard: async () => { calls.push('signout'); controller.abort(); return true },
+  })
+  assert.equal(await runHandoffFlow(deps), 'cancelled')
+  assert.deepEqual(calls, ['fetch', 'signout'])
 })
 
 test('runHandoffFlow: the in-page sign-in needs no navigation, so the guard does not stop it', async () => {
