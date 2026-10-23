@@ -242,6 +242,9 @@ export default defineNuxtConfig({
       // Read at runtime from NUXT_PUBLIC_SSO_LOGIN_URL (a Worker var on
       // Cloudflare); the key must exist here for that override to apply.
       ssoLoginUrl: process.env.NUXT_PUBLIC_SSO_LOGIN_URL || '',
+      // External changelog (MarketData: the website). When set, the nav links
+      // there and /changelog redirects there. Runtime: NUXT_PUBLIC_CHANGELOG_URL.
+      changelogUrl: process.env.NUXT_PUBLIC_CHANGELOG_URL || '',
     },
   },
 })

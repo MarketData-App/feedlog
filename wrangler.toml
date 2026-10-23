@@ -123,3 +123,5 @@ NOINDEX = "true"
 # with return_to=<current URL>. Nuxt reads it at runtime as
 # runtimeConfig.public.ssoLoginUrl and sends it to the browser in the page.
 NUXT_PUBLIC_SSO_LOGIN_URL = "https://dashboard-staging.marketdata.app/marketdata/misc/feedlog-sso"
+# The changelog lives on the website: nav links there, /changelog redirects there.
+NUXT_PUBLIC_CHANGELOG_URL = "https://www.marketdata.app/changelog/"

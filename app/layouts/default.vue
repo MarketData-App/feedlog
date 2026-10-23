@@ -68,10 +68,13 @@ function onEditProfile() {
 }
 
 const portalOrg = usePortalOrg()
+const changelogUrl = useRuntimeConfig().public.changelogUrl as string | undefined
 const navItems = computed(() => [
   { key: 'nav.feedback', to: '/', icon: 'lucide:message-square' },
   { key: 'nav.roadmap', to: '/roadmap', icon: 'lucide:map' },
-  { key: 'nav.changelog', to: '/changelog', icon: 'lucide:newspaper' },
+  changelogUrl
+    ? { key: 'nav.changelog', to: changelogUrl, icon: 'lucide:newspaper', external: true }
+    : { key: 'nav.changelog', to: '/changelog', icon: 'lucide:newspaper', external: false },
   ...(portalOrg.value.modules.helpCenter
     ? [{ key: 'nav.helpCenter', to: '/help', icon: 'lucide:book-open' }]
     : []),
@@ -110,7 +113,7 @@ watch(() => route.path, () => { mobileNavOpen.value = false })
             <NuxtLink
               v-for="item in navItems"
               :key="item.to"
-              :to="localePath(item.to)"
+              :to="item.external ? item.to : localePath(item.to)"
               class="flex items-center text-sm font-bold tracking-wide text-muted-foreground hover:text-foreground transition-colors"
               active-class="!text-primary"
             >
@@ -205,7 +208,7 @@ watch(() => route.path, () => { mobileNavOpen.value = false })
           <NuxtLink
             v-for="item in navItems"
             :key="item.to"
-            :to="localePath(item.to)"
+            :to="item.external ? item.to : localePath(item.to)"
             class="flex items-center gap-1.5 text-sm font-bold text-muted-foreground hover:text-foreground transition-colors"
             active-class="!text-primary"
           >
