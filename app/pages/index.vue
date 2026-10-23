@@ -282,7 +282,7 @@ async function onPostCreated() {
 
 // Vote / unvote on list items
 async function handleVote(post: PostListItem) {
-  if (isVotingClosed(post.status, null)) return // closed posts take no votes
+  if (!canToggleVote(post.status, null, post.hasVoted)) return // closed posts take no new votes
   if (!await ensureIdentity('allowVote')) return
   const wasVoted = post.hasVoted
   post.hasVoted = !wasVoted
@@ -466,12 +466,12 @@ async function handleVote(post: PostListItem) {
         <!-- Upvote button -->
         <button
           class="upvote-btn w-[56px] h-[64px] shrink-0 rounded-md flex flex-col items-center justify-center gap-1 border focus:outline-none"
-          :class="[isVotingClosed(p.status, null) ? 'opacity-50 cursor-not-allowed' : '', p.hasVoted
+          :class="[!canToggleVote(p.status, null, p.hasVoted) ? 'opacity-50 cursor-not-allowed' : '', p.hasVoted
             ? 'bg-primary text-primary-foreground border-primary shadow-sm'
             : 'bg-background text-foreground border-border hover:border-primary hover:text-primary transition-colors']"
           data-fdl-action="feedback_vote"
           data-fdl-source="board-list"
-          :disabled="isVotingClosed(p.status, null)"
+          :disabled="!canToggleVote(p.status, null, p.hasVoted)"
           @click.stop="handleVote(p)"
         >
           <Icon name="lucide:chevron-up" size="24" />

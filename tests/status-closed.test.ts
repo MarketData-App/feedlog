@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readFileSync } from 'node:fs'
-import { ACTIVE_STATUSES, POST_STATUSES, ROADMAP_STATUSES, STATUS_CONFIG, isVotingClosed, statusLabelKey } from '../shared/types/post'
+import { ACTIVE_STATUSES, POST_STATUSES, ROADMAP_STATUSES, STATUS_CONFIG, isVotingClosed, canToggleVote, statusLabelKey } from '../shared/types/post'
 import { updatePostSchema } from '../shared/schemas/post'
 
 const locale = (name: string) => JSON.parse(readFileSync(new URL(`../i18n/locales/${name}.json`, import.meta.url), 'utf8'))
@@ -33,4 +33,12 @@ test('isVotingClosed is true for closed or merged posts', () => {
 test('the web roadmap query keeps closed off', () => {
   const src = readFileSync(new URL('../server/services/feedback-web-queries.ts', import.meta.url), 'utf8')
   assert.match(src, /const ROADMAP_STATUSES = \['planned', 'in_progress', 'done'\] as const/)
+})
+
+test('canToggleVote: closed refuses new votes but allows removing one', () => {
+  assert.equal(canToggleVote('closed', null, false), false)
+  assert.equal(canToggleVote('closed', null, true), true)
+  assert.equal(canToggleVote('open', null, false), true)
+  assert.equal(canToggleVote('open', null, true), true)
+  assert.equal(canToggleVote('open', 'some-id', true), false)
 })

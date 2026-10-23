@@ -62,6 +62,15 @@ export function isVotingClosed(status: string, mergedTo: string | null): boolean
   return status === 'closed' || !!mergedTo
 }
 
+/**
+ * Whether a vote click may go ahead. Closed means no NEW votes: a user who
+ * already voted may still remove that vote. A merged post takes no clicks.
+ */
+export function canToggleVote(status: string, mergedTo: string | null, hasVoted: boolean): boolean {
+  if (mergedTo) return false
+  return status !== 'closed' || hasVoted
+}
+
 export function statusLabelKey(status: string): string {
   return `status.${status in STATUS_CONFIG ? status : 'open'}`
 }
