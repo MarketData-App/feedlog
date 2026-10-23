@@ -6,8 +6,12 @@ const { t } = useI18n()
 
 const open = defineModel<boolean>('open', { default: false })
 
+// `team`: the board's own email/password form (/team-login). Shows the email
+// states only, and the visitor cannot dismiss it.
+const props = defineProps<{ team?: boolean }>()
+
 type ModalState = 'sign-in' | 'sign-in-email' | 'sign-up-email' | 'verify-email' | 'forgot-password' | 'reset-sent'
-const state = ref<ModalState>('sign-in')
+const state = ref<ModalState>(props.team ? 'sign-in-email' : 'sign-in')
 
 const loading = ref(false)
 
@@ -28,7 +32,7 @@ const showSeparator = computed(() => hasOAuth.value && emailEnabled.value)
 
 function initialState(): ModalState {
   // Skip the chooser when email is the only available method.
-  return !hasOAuth.value && emailEnabled.value ? 'sign-in-email' : 'sign-in'
+  return props.team || (!hasOAuth.value && emailEnabled.value) ? 'sign-in-email' : 'sign-in'
 }
 
 const form = reactive({
@@ -74,6 +78,12 @@ watch(open, (val) => {
   }
 })
 
+// Escape, the overlay and the X close the modal; on /team-login there is
+// nothing behind it, so it stays.
+function onOpenChange(value: boolean) {
+  if (!props.team) open.value = value
+}
+
 function resetForm() {
   form.name = ''
   form.email = ''
@@ -83,7 +93,7 @@ function resetForm() {
 function switchTo(target: ModalState) {
   // If OAuth is the only reason the chooser exists, there's nothing to route back to.
   // Send the user straight to the email form instead.
-  if (target === 'sign-in' && !hasOAuth.value && emailEnabled.value) {
+  if (target === 'sign-in' && (props.team || (!hasOAuth.value && emailEnabled.value))) {
     target = 'sign-in-email'
   }
   // Keep email when switching between related states
@@ -342,8 +352,8 @@ const showPassword = ref(false)
 </script>
 
 <template>
-  <Dialog v-if="open" :open="true" @update:open="open = $event">
-    <DialogContent class="sm:max-w-sm">
+  <Dialog v-if="open" :open="true" @update:open="onOpenChange">
+    <DialogContent class="sm:max-w-sm" :show-close-button="!props.team">
       <!-- State 1: Sign In (OAuth first) -->
       <template v-if="state === 'sign-in'">
         <DialogHeader class="text-center space-y-2">
@@ -454,7 +464,7 @@ const showPassword = ref(false)
         </form>
 
         <button
-          v-if="hasOAuth"
+          v-if="hasOAuth && !props.team"
           class="w-full text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-1"
           @click="switchTo('sign-in')"
         >

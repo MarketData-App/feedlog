@@ -11,6 +11,7 @@ import { DEFAULT_ORG_ID } from '../../shared/constants/default-org'
 import { GUEST_EMAIL_DOMAIN } from '../../shared/utils/guest'
 import { guestTag } from '../../shared/utils/identity'
 import { hashPassword, verifyPassword } from './password-hash'
+import { isSignupAllowed, signupAllowlist } from './signup-allowlist'
 import { consola } from 'consola'
 import { mcpAuthPlugins } from '../mcp/auth-plugins'
 import { mcpEnabled, type mcpConfig } from '../mcp/config'
@@ -19,8 +20,6 @@ import { cleanupMemberMcpAccess, cleanupOrganizationMcpAccess, cleanupUserMcpAcc
 const logger = consola.withTag('auth')
 
 const env = process.env
-
-const systemAdminEmails = env.SYSTEM_ADMIN_EMAILS?.split(',').map(s => s.trim()).filter(Boolean) ?? []
 
 const hasGoogle = !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)
 const hasGithub = !!(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET)
@@ -81,9 +80,12 @@ const emailAndPassword = emailLoginEnabled
   }
   : { enabled: false }
 
+// The verification mail goes out on sign-up only when verification is
+// required: with AUTH_EMAIL_VERIFY=false the new account is signed in at once,
+// and a "confirm your email" mail would only confuse.
 const emailVerification = hasEmailProvider
   ? {
-    sendOnSignUp: true,
+    sendOnSignUp: requireEmailVerification,
     autoSignInAfterVerification: true,
     expiresIn: 3600,
     sendVerificationEmail: async ({ user, url }: { user: { email: string; name: string }; url: string }) => {
@@ -123,12 +125,13 @@ async function loadOrgList(userId: string, confineToOrgId?: string | null) {
 }
 
 // Bootstrap hook: any email listed in SYSTEM_ADMIN_EMAILS is auto-enrolled
-// as owner of the default org on signup.
+// as owner of the default org on signup. Same case-insensitive match as the
+// sign-up allowlist, so an admin who may sign up also gets the role.
 //
 // We intentionally do NOT auto-accept pending invitations on registration:
 // invited users sign in and click Accept on /invite?id=... themselves.
 async function bootstrapAfterUserCreate(newUser: { id: string; email: string }) {
-  if (!systemAdminEmails.includes(newUser.email)) return
+  if (!isSignupAllowed(newUser.email, env.SYSTEM_ADMIN_EMAILS)) return
   await db.insert(member).values({
     id: uuidv7(),
     organizationId: DEFAULT_ORG_ID,
@@ -240,6 +243,8 @@ export function buildAuthConfig(overrides: AuthConfigOverrides = {}): BetterAuth
       // /api/widget/auth/exchange), and the plugin signs it itself with
       // base64urlnopad HMAC, which a standard-base64 cookie value would not match.
       bearer(),
+      // MarketData: email sign-up only for SYSTEM_ADMIN_EMAILS (customers use SSO).
+      signupAllowlist(),
       admin(),
       anonymous({
         // Reserved by RFC 2606 — nobody can ever register it, so a stray email
@@ -352,7 +357,9 @@ export const authConfig = {
   google: hasGoogle,
   github: hasGithub,
   email: emailLoginEnabled,
-  emailVerification: !!emailVerification,
+  // Tells the sign-up form to wait for the verification mail. Only when it is
+  // both sent and required: otherwise sign-up signs the user in at once.
+  emailVerification: !!emailVerification && requireEmailVerification,
   // True when an outbound email provider (Resend) is configured. Surfaced
   // so the invite modal can warn admins when invites will be created but
   // not delivered, and they must copy the link manually.

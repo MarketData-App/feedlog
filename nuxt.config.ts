@@ -150,6 +150,7 @@ export default defineNuxtConfig({
     '/auth/**': { sitemap: false, robots: false },
     '/invite': { sitemap: false, robots: false },
     '/reset-password': { sitemap: false, robots: false },
+    '/team-login': { sitemap: false, robots: false },
     '/verified': { sitemap: false, robots: false },
     '/mcp/**': { sitemap: false, robots: false },
     '/sso/**': { sitemap: false, robots: false },
@@ -236,6 +237,11 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       uploadPrefix: process.env.NUXT_PUBLIC_UPLOAD_PREFIX || 'uploads',
+      // Product-SSO login page (MarketData: the aMember feedlog-sso plugin).
+      // When set, every "Sign in" goes there with return_to=<current URL>.
+      // Read at runtime from NUXT_PUBLIC_SSO_LOGIN_URL (a Worker var on
+      // Cloudflare); the key must exist here for that override to apply.
+      ssoLoginUrl: process.env.NUXT_PUBLIC_SSO_LOGIN_URL || '',
     },
   },
 })

@@ -1,12 +1,27 @@
+import { ssoLoginTarget } from '~/utils/sso-login-url'
+
 // `reason` holds an i18n key rather than rendered text: the modal is mounted
 // elsewhere and may render in a different locale than the caller.
+//
+// With `runtimeConfig.public.ssoLoginUrl` set (NUXT_PUBLIC_SSO_LOGIN_URL),
+// open() sends the browser to that login page instead, with the current URL as
+// return_to. The board admin signs in at /team-login, which mounts the modal
+// directly and does not go through open().
 export function useLoginModal() {
   const isOpen = useState('login-modal', () => false)
   const reason = useState<string | null>('login-modal-reason', () => null)
+  const ssoLoginUrl = useRuntimeConfig().public.ssoLoginUrl
   return {
     isOpen,
     reason,
     open: (reasonKey?: string) => {
+      if (import.meta.client) {
+        const target = ssoLoginTarget(ssoLoginUrl, window.location.href, reasonKey === LOCAL_AUTH_REASON)
+        if (target) {
+          window.location.assign(target)
+          return
+        }
+      }
       reason.value = reasonKey ?? null
       isOpen.value = true
     },

@@ -119,3 +119,7 @@ AUTH_EMAIL_VERIFY = "false"
 MCP_ENABLED = "false"
 EMAIL_ALLOWED_DOMAINS = "resend.dev,marketdata.app,contact.marketdata.app"
 NOINDEX = "true"
+# Every "Sign in" goes to the aMember feedlog-sso plugin (staging aMember),
+# with return_to=<current URL>. Nuxt reads it at runtime as
+# runtimeConfig.public.ssoLoginUrl and sends it to the browser in the page.
+NUXT_PUBLIC_SSO_LOGIN_URL = "https://dashboard-staging.marketdata.app/marketdata/misc/feedlog-sso"

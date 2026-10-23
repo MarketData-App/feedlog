@@ -3,7 +3,7 @@ import { getRequestURL } from 'h3'
 import { jwtVerify } from 'jose'
 import { eq } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
-import { user } from '#layers/feedlog/server/db/schemas'
+import { user } from '../db/schemas'
 
 // Product-SSO helpers: verify the customer-signed HS256 JWT, resolve the
 // asserted identity to a user row, guard the return_to target against open
@@ -57,8 +57,10 @@ export async function verifySsoJwt(token: string, secrets: string[]): Promise<Ss
   // email is the identity key — hard-required. name backs a NOT NULL
   // column; fall back to the email when the org omits it. All other claims are
   // ignored (no custom-field mechanism).
+  // A reserved .invalid address (importer placeholders, guest accounts) never
+  // belongs to a real person, so no org may sign in as one.
   const email = payload.email
-  if (typeof email !== 'string' || !email.includes('@')) {
+  if (typeof email !== 'string' || !email.includes('@') || isReservedEmail(email)) {
     throw createError({ statusCode: 400, message: 'SSO token must carry a valid email claim' })
   }
   const normalizedEmail = email.trim().toLowerCase()
@@ -110,9 +112,19 @@ export async function findOrCreateSsoUser(db: ReturnType<typeof useDB>, identity
   return row[0].id
 }
 
+// RFC 2606 reserves the .invalid TLD: no such address can receive mail or
+// belong to a person. The importer's placeholders and guest accounts use it.
+export function isReservedEmail(email: string): boolean {
+  const at = email.lastIndexOf('@')
+  const domain = email.slice(at + 1).trim().toLowerCase().replace(/\.+$/, '')
+  return domain === 'invalid' || domain.endsWith('.invalid')
+}
+
 // Open-redirect guard for return_to. Allows only a same-host relative path
 // or a same-host absolute URL; everything else falls back to "/". Rejects
-// protocol-relative ("//evil.com") and backslash tricks before parsing.
+// protocol-relative ("//evil.com") and backslash tricks before parsing, and
+// again after: dot segments normalize "/.//evil.com" to the path
+// "//evil.com", which a browser reads as another host.
 export function validateReturnTo(event: H3Event, returnTo: string | undefined | null): string {
   if (!returnTo) return '/'
   if (returnTo.includes('\\') || returnTo.startsWith('//')) return '/'
@@ -120,6 +132,7 @@ export function validateReturnTo(event: H3Event, returnTo: string | undefined | 
   try {
     const url = new URL(returnTo, reqUrl.origin)
     if (url.host !== reqUrl.host) return '/'
+    if (url.pathname.startsWith('//')) return '/'
     return url.pathname + url.search + url.hash
   }
   catch {
