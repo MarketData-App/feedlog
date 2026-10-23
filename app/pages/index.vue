@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { patchViewerFields } from '~/utils/session-refresh'
+
 usePageOg({ kind: 'home' })
 const portalOrg = usePortalOrg() // for the sr-only <h1> below
 const branding = computed(() => portalOrg.value.branding)
@@ -147,6 +149,27 @@ watch(searchQuery, async () => {
     return
   }
   await refreshPosts()
+})
+
+// MarketData: a sign-in on the page (background SSO handoff, no reload). The
+// vote flags on screen belonged to nobody; fetch the same view again (as many
+// posts as are shown, up to the API's 100) and copy the flags onto the cards.
+// The list keeps its items, order and length, so scroll and focus stay.
+onSessionRefreshed(async () => {
+  const q = searchQuery.value.trim()
+  const fresh: { data: PostListItem[] } = q
+    ? await useApiFetch<{ data: PostListItem[] }>('/api/posts/search', {
+        query: { q, status: statusList.value?.join(',') || undefined },
+      })
+    : await useApiFetch<CursorPaginatedList<PostListItem>>('/api/posts', {
+        query: {
+          boardId: activeBoardId.value || undefined,
+          status: statusList.value?.join(',') || undefined,
+          sort: sort.value,
+          pageSize: Math.min(100, Math.max(10, posts.value.length)),
+        },
+      })
+  patchViewerFields(posts.value, fresh.data, ['hasVoted', 'voteCount'])
 })
 
 onBeforeUnmount(() => {

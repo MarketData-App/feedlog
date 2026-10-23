@@ -333,6 +333,10 @@ watch(commentSort, () => {
   store.fetchComments(props.slug, commentSort.value)
 })
 
+// MarketData: a sign-in on the page (background SSO handoff) updates the vote,
+// like and subscription flags in place, without a reload.
+onSessionRefreshed(() => store.syncViewerState(props.slug, commentSort.value))
+
 async function handleCopyEmail() {
   const email = post.value?.author?.email
   if (!email) return

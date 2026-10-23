@@ -1,16 +1,12 @@
 import { initUserProfile } from '@marketdataapp/ui/user-profile'
 import type { AuthSession } from '~/composables/useAuth'
-import { buildSsoLoginUrl } from '~/utils/sso-login-url'
 import {
   HANDOFF_TIMEOUT_MS,
   boardSessionFor,
   buildLoginHref,
   classifyUserResponse,
-  decideHandoff,
-  isEndpointLink,
-  isHandoffExcludedPath,
-  markRedirected,
-  readRedirected,
+  headerLinkAction,
+  runHandoffFlow,
   silentHandoffUrl,
   waitForSilentMessage,
   type DashboardUser,
@@ -22,7 +18,7 @@ import {
 // - the "Log in" links, which return to the page the visitor is on;
 // - "Log out", which also ends the board's SSO session;
 // - the background handoff (hidden iframe, one top-level fallback per browser
-//   session) and the logout sync.
+//   session), the account switch, and the logout sync (runHandoffFlow).
 // Client only. The default layout calls it; it needs the auth-session payload
 // that the layout has awaited.
 
@@ -43,6 +39,7 @@ export function useAmemberSession() {
   const route = useRoute()
   const { locales } = useI18n()
   const { signOut } = useAuth()
+  const epoch = useSessionEpoch()
 
   const apiUrl = String(config.amemberApiUrl)
   const loginUrl = String(config.amemberLoginUrl)
@@ -97,22 +94,29 @@ export function useAmemberSession() {
   }
 
   // One delegated listener set on the header (capture): it covers the control's
-  // links and the drawer's fallback "Log In". A login link gets the current page
-  // as its return address just before it is used (pointer, keyboard focus, or
-  // click), as the page may have changed since it was rendered.
+  // links and the drawer's fallback "Log In". What each event asks for is
+  // decided by headerLinkAction (tested): a login link gets the current page as
+  // its return address just before use; "Log out" ends the board's SSO session
+  // first, then goes on to the dashboard logout.
   function onHeaderEvent(event: Event) {
     const link = (event.target as Element | null)?.closest?.('a')
-    if (!link?.href) return
-    if (isEndpointLink(link.href, loginUrl)) {
-      link.href = buildLoginHref(link.href, window.location.href)
+    const mouse = event as MouseEvent
+    const action = headerLinkAction({
+      eventType: event.type,
+      href: link?.href,
+      loginUrl,
+      logoutUrl,
+      currentUrl: window.location.href,
+      isSsoSession: isSsoSession.value,
+      button: typeof mouse.button === 'number' ? mouse.button : 0,
+      modified: !!(mouse.metaKey || mouse.ctrlKey || mouse.shiftKey || mouse.altKey),
+      defaultPrevented: event.defaultPrevented,
+    })
+    if (!link || action.kind === 'ignore') return
+    if (action.kind === 'login') {
+      link.href = action.href
       return
     }
-    // "Log out" ends the board's SSO session too, then goes on to the
-    // dashboard logout. A modified click (new tab) is left alone; the logout
-    // sync on the next board page covers it.
-    if (event.type !== 'click' || !isEndpointLink(link.href, logoutUrl) || !isSsoSession.value) return
-    const click = event as MouseEvent
-    if (click.defaultPrevented || click.button !== 0 || click.metaKey || click.ctrlKey || click.shiftKey || click.altKey) return
     event.preventDefault()
     const target = link.href
     signOutBoard().finally(() => window.location.assign(target))
@@ -149,60 +153,46 @@ export function useAmemberSession() {
       timeoutMs: HANDOFF_TIMEOUT_MS,
     })
     frame.remove()
-    if (!answered) return false
-    // The handoff set the board cookie. Refresh the session in place; on a new
-    // account the auth-reload plugin reloads this same page once, so per-user
-    // state (vote highlights, subscriptions) is drawn for the new user.
-    await refreshNuxtData('auth-session')
-    return !!boardSessionFor(session.value as Parameters<typeof boardSessionFor>[0])
+    return answered
   }
 
-  // The dashboard reports nobody, and the board still holds an SSO session.
-  async function syncLogout() {
-    const ok = await signOutBoard()
+  // The handoff set the board cookie: read the new session into the page, no
+  // reload. Reactive readers of the session (header, board bar, comment box)
+  // follow by themselves; the epoch tells the surfaces with per-viewer state
+  // (votes, likes, subscription) to fetch those fields again. A guest's writes
+  // are claimed by the default layout when hasAccount turns true.
+  async function refreshInPlace() {
     await refreshNuxtData('auth-session')
-    // Reload once, so nothing drawn for the old account stays on the page.
-    // Only after a sign-out that worked: the next load then finds no board
-    // session, so it cannot come back here. reloadNuxtApp's own 10 s marker is
-    // a second guard.
-    if (ok && !session.value?.user) reloadNuxtApp()
+    epoch.value++
+  }
+
+  // After a sign-out (the logout sync, or a switch that could not finish):
+  // reload once, so nothing drawn for the old account stays on the page. Only
+  // when no session is left: the next load then has nothing to sign out, so it
+  // cannot come back here. reloadNuxtApp's own 10 s marker is a second guard.
+  async function afterSignOut() {
+    await refreshNuxtData('auth-session')
+    if (!session.value?.user) reloadNuxtApp()
   }
 
   let started = false
   async function runHandoff(): Promise<void> {
-    if (started || !ssoLoginUrl) return
+    if (started) return
     started = true
-    const localeCodes = locales.value.map(l => (typeof l === 'string' ? l : l.code))
-    if (isHandoffExcludedPath(route.path, localeCodes)) return
-    // Nothing the dashboard says changes a team-login session: do not ask.
-    if (isLocalSession.value) return
-
-    const dashboard = await fetchDashboardUser()
-    // No clear answer (network, CORS): leave everything as it is.
-    if (dashboard.kind === 'unknown') return
-    const amemberUser = dashboard.kind === 'user' ? dashboard.user : null
-    const storage = sessionStore()
-
-    const first = decideHandoff({
-      amemberUser,
-      boardSession: boardSession.value,
-      redirectedThisSession: readRedirected(storage),
-      iframeFailed: false,
+    await runHandoffFlow({
+      ssoLoginUrl,
+      path: route.path,
+      localeCodes: locales.value.map(l => (typeof l === 'string' ? l : l.code)),
+      storage: sessionStore(),
+      boardSession: () => boardSession.value,
+      fetchDashboardUser,
+      signOutBoard,
+      silentHandoff,
+      refreshInPlace,
+      afterSignOut,
+      redirect: url => window.location.assign(url),
+      currentUrl: () => window.location.href,
     })
-    if (first === 'signout') return syncLogout()
-    if (first !== 'iframe') return
-    if (await silentHandoff()) return
-
-    const next = decideHandoff({
-      amemberUser,
-      boardSession: boardSession.value,
-      redirectedThisSession: readRedirected(storage),
-      iframeFailed: true,
-    })
-    // Mark first; a page that cannot keep the mark never redirects.
-    if (next === 'redirect' && markRedirected(storage)) {
-      window.location.assign(buildSsoLoginUrl(ssoLoginUrl, window.location.href))
-    }
   }
 
   return { isLocalSession, mountControl, onHeaderEvent, runHandoff }

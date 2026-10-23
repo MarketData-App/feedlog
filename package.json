@@ -22,7 +22,7 @@
     "agent:prompt": "node --import tsx scripts/preview-agent-prompt.ts",
     "agent:test": "node --env-file=.env --import tsx --test tests/agent-*.test.ts",
     "agent:search-eval": "node --env-file=.env --import tsx scripts/evaluate-agent-help-search.ts",
-    "marketdata:test": "node --import tsx --test tests/email-allowlist.test.ts tests/status-closed.test.ts tests/sso-login.test.ts tests/canny-redirect.test.ts tests/email-from.test.ts tests/site-header.test.ts tests/sso-handoff.test.ts",
+    "marketdata:test": "node --import tsx --test tests/email-allowlist.test.ts tests/status-closed.test.ts tests/sso-login.test.ts tests/canny-redirect.test.ts tests/email-from.test.ts tests/site-header.test.ts tests/sso-handoff.test.ts tests/session-refresh.test.ts",
     "mcp:test": "node --import tsx --test tests/mcp*.test.ts"
   },
   "dependencies": {

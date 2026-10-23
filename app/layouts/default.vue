@@ -18,6 +18,14 @@ const { hasAccount, claimIfPending } = useGuestSession()
 // next claims all over again. Claiming on load puts it in the realm that lives
 // long enough to finish, and every sign-in path ends in one.
 if (hasAccount.value) claimIfPending()
+// MarketData: a first sign-in no longer reloads (auth-reload reloads only when
+// one account replaces another; ~/utils/session-refresh), so a sign-in on the
+// page (the background SSO handoff, the in-page modal) claims when it lands.
+// Nothing replaces this realm then, so the claim lives to see its answer; and
+// if an account switch does reload, the token is kept until a claim answers.
+watch(hasAccount, (now) => {
+  if (now) claimIfPending()
+})
 
 const { isOpen: showLoginModal } = useLoginModal()
 

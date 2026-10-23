@@ -1,3 +1,5 @@
+import { patchViewerFields } from '~/utils/session-refresh'
+
 const MAX_CACHE_SIZE = 20
 
 export const usePostDetailStore = defineStore('postDetail', () => {
@@ -396,6 +398,31 @@ export const usePostDetailStore = defineStore('postDetail', () => {
     }
   }
 
+  // MarketData: the session changed on the page (background SSO handoff, no
+  // reload). Fetch the per-viewer fields again and copy them onto what is on
+  // screen: the post's vote and subscription flags, and the like flags of the
+  // comments already shown (same sort, as many as are loaded, up to the API's
+  // 100). Nothing else changes, so open editors and the scroll stay.
+  async function syncViewerState(slug: string, sort: string = 'newest') {
+    const shown = posts.value[slug]
+    if (!shown) return
+    const fresh = await useApiFetch<PostDetail>(`/api/posts/${slug}`)
+    const current = posts.value[slug]
+    if (current) {
+      current.hasVoted = fresh.hasVoted
+      current.voteCount = fresh.voteCount
+      current.subscribed = fresh.subscribed
+    }
+    const list = commentsMap.value[shown.id]
+    if (!list?.length) return
+    const data = await useApiFetch<{ data: CommentItem[] }>(
+      `/api/posts/${shown.id}/comments`,
+      { query: { sort, withChildren: 'true', limit: Math.min(100, Math.max(10, list.length)) } },
+    )
+    const target = commentsMap.value[shown.id]
+    if (target) patchViewerFields(target, data.data, ['hasLiked', 'likeCount'], 'children')
+  }
+
   return {
     // Accessors
     getPost,
@@ -421,5 +448,6 @@ export const usePostDetailStore = defineStore('postDetail', () => {
     unlikeComment,
     updatePost,
     deletePost,
+    syncViewerState,
   }
 })

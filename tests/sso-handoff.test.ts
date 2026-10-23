@@ -21,11 +21,13 @@ const {
   buildLoginHref,
   classifyUserResponse,
   decideHandoff,
+  headerLinkAction,
   isEndpointLink,
   isHandoffExcludedPath,
   isSilentMessage,
   markRedirected,
   readRedirected,
+  runHandoffFlow,
   silentHandoffUrl,
   waitForSilentMessage,
 } = await import('../app/utils/sso-handoff')
@@ -87,10 +89,163 @@ test('boardSessionFor: no session and a guest (anonymous) session count as no bo
   assert.equal(boardSessionFor({ user: { id: 'g', isAnonymous: true }, session: { ssoOrgId: null } }), null)
 })
 
-test('boardSessionFor: keeps the ssoOrgId marker, null for a local session', () => {
-  assert.deepEqual(boardSessionFor({ user: { id: 'u' }, session: { ssoOrgId: 'org-1' } }), { ssoOrgId: 'org-1' })
-  assert.deepEqual(boardSessionFor({ user: { id: 'u' }, session: { ssoOrgId: null } }), { ssoOrgId: null })
-  assert.deepEqual(boardSessionFor({ user: { id: 'u' }, session: {} }), { ssoOrgId: null })
+test('boardSessionFor: keeps the ssoOrgId marker (null for a local session) and the user email', () => {
+  assert.deepEqual(boardSessionFor({ user: { id: 'u', email: 'a@x.com' }, session: { ssoOrgId: 'org-1' } }), { ssoOrgId: 'org-1', email: 'a@x.com' })
+  assert.deepEqual(boardSessionFor({ user: { id: 'u', email: 'a@x.com' }, session: { ssoOrgId: null } }), { ssoOrgId: null, email: 'a@x.com' })
+  assert.deepEqual(boardSessionFor({ user: { id: 'u' }, session: {} }), { ssoOrgId: null, email: null })
+})
+
+// ── Fix round 1, finding 2: the board acts as the account the dashboard shows ──
+
+const ssoA = { ssoOrgId: 'org-1', email: 'alice@example.com' }
+
+test('decideHandoff: SSO board session for another email than the dashboard user → switch', () => {
+  assert.equal(decideHandoff({ amemberUser: { email: 'bob@example.com' }, boardSession: ssoA, redirectedThisSession: false, iframeFailed: false }), 'switch')
+  assert.equal(decideHandoff({ amemberUser: { email: 'bob@example.com' }, boardSession: ssoA, redirectedThisSession: true, iframeFailed: true }), 'switch')
+})
+
+test('decideHandoff: the same email in any case or with spaces → none', () => {
+  for (const email of ['alice@example.com', 'ALICE@Example.COM', '  alice@example.com ']) {
+    assert.equal(decideHandoff({ amemberUser: { email }, boardSession: ssoA, redirectedThisSession: false, iframeFailed: false }), 'none', email)
+  }
+})
+
+test('decideHandoff: a local session is never switched, whatever the dashboard email', () => {
+  assert.equal(decideHandoff({ amemberUser: { email: 'bob@example.com' }, boardSession: { ssoOrgId: null, email: 'admin@example.com' }, redirectedThisSession: false, iframeFailed: false }), 'none')
+})
+
+test('decideHandoff: no email on one side gives no switch (nothing to compare)', () => {
+  assert.equal(decideHandoff({ amemberUser: { login: 'bob' }, boardSession: ssoA, redirectedThisSession: false, iframeFailed: false }), 'none')
+  assert.equal(decideHandoff({ amemberUser: { email: 'bob@example.com' }, boardSession: { ssoOrgId: 'org-1', email: null }, redirectedThisSession: false, iframeFailed: false }), 'none')
+})
+
+// ── The handoff run, with fakes for the page (no browser) ──────────────────
+
+function flow(over: Partial<Parameters<typeof runHandoffFlow>[0]> & { board?: { ssoOrgId: string | null, email: string | null } | null, dashboard?: unknown, afterHandoffBoard?: { ssoOrgId: string | null, email: string | null } | null } = {}) {
+  const calls: string[] = []
+  let board = over.board === undefined ? null : over.board
+  const storage = memoryStorage()
+  const deps = {
+    ssoLoginUrl: PLUGIN,
+    path: '/p/abc',
+    localeCodes: ['en', 'zh'],
+    storage,
+    boardSession: () => board,
+    fetchDashboardUser: async () => { calls.push('fetch'); return (over.dashboard ?? { kind: 'user', user: { email: 'bob@example.com' } }) as never },
+    signOutBoard: async () => { calls.push('signout'); board = null; return true },
+    silentHandoff: async () => { calls.push('iframe'); return true },
+    refreshInPlace: async () => { calls.push('refresh'); board = over.afterHandoffBoard === undefined ? { ssoOrgId: 'org-1', email: 'bob@example.com' } : over.afterHandoffBoard },
+    afterSignOut: async () => { calls.push('after-signout') },
+    redirect: (url: string) => { calls.push(`redirect ${url}`) },
+    currentUrl: () => `${BOARD}/p/abc`,
+    ...over,
+  }
+  return { deps, calls, storage }
+}
+
+test('runHandoffFlow: a local (team-login) session returns before the dashboard is asked', async () => {
+  const { deps, calls } = flow({ board: { ssoOrgId: null, email: 'admin@example.com' } })
+  assert.equal(await runHandoffFlow(deps), 'skipped')
+  assert.deepEqual(calls, [])
+})
+
+test('runHandoffFlow: excluded paths and no SSO login URL never ask the dashboard', async () => {
+  for (const over of [{ path: '/team-login' }, { path: '/zh/sso/silent' }, { path: '/dashboard/posts' }, { ssoLoginUrl: '' }]) {
+    const { deps, calls } = flow(over)
+    assert.equal(await runHandoffFlow(deps), 'skipped', JSON.stringify(over))
+    assert.deepEqual(calls, [])
+  }
+})
+
+test('runHandoffFlow: an unknown dashboard answer changes nothing', async () => {
+  const { deps, calls } = flow({ board: ssoA, dashboard: { kind: 'unknown' } })
+  assert.equal(await runHandoffFlow(deps), 'unknown')
+  assert.deepEqual(calls, ['fetch'])
+})
+
+test('runHandoffFlow: dashboard user, no board session → iframe, then refresh in place (no sign-out, no redirect)', async () => {
+  const { deps, calls } = flow()
+  assert.equal(await runHandoffFlow(deps), 'signed-in')
+  assert.deepEqual(calls, ['fetch', 'iframe', 'refresh'])
+})
+
+test('runHandoffFlow: dashboard reports nobody and an SSO board session → sign out, then the logout refresh', async () => {
+  const { deps, calls } = flow({ board: ssoA, dashboard: { kind: 'none' } })
+  assert.equal(await runHandoffFlow(deps), 'signed-out')
+  assert.deepEqual(calls, ['fetch', 'signout', 'after-signout'])
+})
+
+test('runHandoffFlow: another account on the dashboard → sign out first, then the iframe handoff', async () => {
+  const { deps, calls } = flow({ board: ssoA })
+  assert.equal(await runHandoffFlow(deps), 'signed-in')
+  assert.deepEqual(calls, ['fetch', 'signout', 'iframe', 'refresh'])
+})
+
+test('runHandoffFlow: the same account in another case → nothing to do', async () => {
+  const { deps, calls } = flow({ board: ssoA, dashboard: { kind: 'user', user: { email: 'Alice@Example.com' } } })
+  assert.equal(await runHandoffFlow(deps), 'none')
+  assert.deepEqual(calls, ['fetch'])
+})
+
+test('runHandoffFlow: a switch whose sign-out fails stops there', async () => {
+  const { deps, calls } = flow({ board: ssoA, signOutBoard: async () => { calls.push('signout'); return false } })
+  assert.equal(await runHandoffFlow(deps), 'failed')
+  assert.deepEqual(calls, ['fetch', 'signout'])
+})
+
+test('runHandoffFlow: the iframe fails → one top-level redirect back to this page, marked first', async () => {
+  const { deps, calls, storage } = flow({ silentHandoff: async () => { calls.push('iframe'); return false } })
+  assert.equal(await runHandoffFlow(deps), 'redirected')
+  assert.equal(calls.length, 3)
+  assert.equal(calls[2], `redirect ${PLUGIN}?return_to=${encodeURIComponent(`${BOARD}/p/abc`)}`)
+  assert.equal(storage.getItem('feedlog:sso-redirected'), '1')
+  // The next load in the same browser session: no second redirect.
+  const again = flow({ silentHandoff: async () => { again.calls.push('iframe'); return false }, storage })
+  assert.equal(await runHandoffFlow(again.deps), 'failed')
+  assert.deepEqual(again.calls, ['fetch', 'iframe'])
+})
+
+test('runHandoffFlow: the frame answers but no board session appears (blocked cookie) → the fallback redirect', async () => {
+  const { deps, calls } = flow({ afterHandoffBoard: null })
+  assert.equal(await runHandoffFlow(deps), 'redirected')
+  assert.deepEqual(calls.slice(0, 3), ['fetch', 'iframe', 'refresh'])
+})
+
+test('runHandoffFlow: a switch that cannot finish leaves the page signed out (logout refresh)', async () => {
+  const storage = memoryStorage()
+  markRedirected(storage)
+  const { deps, calls } = flow({ board: ssoA, storage, silentHandoff: async () => { calls.push('iframe'); return false } })
+  assert.equal(await runHandoffFlow(deps), 'failed')
+  assert.deepEqual(calls, ['fetch', 'signout', 'iframe', 'after-signout'])
+})
+
+// ── Header links: login return address, and the Log out intercept ─────────
+
+const LOGOUT = 'https://dashboard-staging.marketdata.app/marketdata/logout'
+function linkAction(over: Partial<Parameters<typeof headerLinkAction>[0]>) {
+  return headerLinkAction({ eventType: 'click', href: LOGOUT, loginUrl: LOGIN, logoutUrl: LOGOUT, currentUrl: `${BOARD}/p/abc`, isSsoSession: true, button: 0, modified: false, defaultPrevented: false, ...over })
+}
+
+test('headerLinkAction: a login link gets the current page as its return address on any event', () => {
+  for (const eventType of ['pointerdown', 'focusin', 'click']) {
+    const action = linkAction({ eventType, href: LOGIN, isSsoSession: false })
+    assert.equal(action.kind, 'login')
+    assert.equal(new URL((action as { href: string }).href).searchParams.get('amember_redirect_url'), `${BOARD}/p/abc`)
+  }
+})
+
+test('headerLinkAction: Log out is intercepted only for a plain click with an SSO session', () => {
+  assert.deepEqual(linkAction({}), { kind: 'logout' })
+  assert.deepEqual(linkAction({ isSsoSession: false }), { kind: 'ignore' })
+  assert.deepEqual(linkAction({ modified: true }), { kind: 'ignore' })
+  assert.deepEqual(linkAction({ button: 1 }), { kind: 'ignore' })
+  assert.deepEqual(linkAction({ defaultPrevented: true }), { kind: 'ignore' })
+  assert.deepEqual(linkAction({ eventType: 'pointerdown' }), { kind: 'ignore' })
+})
+
+test('headerLinkAction: other links and no link are ignored', () => {
+  assert.deepEqual(linkAction({ href: 'https://www.marketdata.app/signup/' }), { kind: 'ignore' })
+  assert.deepEqual(linkAction({ href: null }), { kind: 'ignore' })
 })
 
 // ── What the dashboard API answer means ─────────────────────────────────────
