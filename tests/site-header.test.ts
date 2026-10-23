@@ -147,3 +147,16 @@ test('extractSiteHeaderCss gives the header the page context www gives it', () =
   // After the kit token blocks, so it wins at equal specificity.
   assert.ok(css.lastIndexOf('font-family: var(--font-sans)') > css.indexOf(':is(.dark, [data-theme=\'dark\']) .site-header, '))
 })
+
+test('board home: only the board bar offers "New request"; the toolbar copy stays hidden', () => {
+  // The toolbar button made the row 410 px wide at a 390 px phone width (sideways
+  // scroll) and doubled the board bar's button on desktop. It stays in the DOM,
+  // hidden, so FeedLog's mobile-search transition keeps its anchor.
+  const toolbar = readFileSync(new URL('../app/components/board/BoardSearchToolbar.vue', import.meta.url), 'utf8')
+  const button = toolbar.match(/<Button\b[^>]*data-fdl-source="toolbar"[^>]*>/s)?.[0] ?? ''
+  assert.ok(button, 'toolbar New Request button found')
+  assert.match(button, /\bclass="[^"]*\bhidden\b[^"]*"/)
+  assert.match(button, /v-show="!searchOpenMobile"/)
+  const bar = readFileSync(new URL('../app/components/BoardBar.vue', import.meta.url), 'utf8')
+  assert.match(bar, /data-fdl-source="board-bar"/)
+})

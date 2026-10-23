@@ -132,10 +132,13 @@ defineExpose({ reset })
           </button>
         </div>
       </Transition>
+      <!-- MarketData: `hidden` on every width. The board bar's "New request" is the
+           one button; this copy made the row too wide at phone widths (sideways
+           scroll) and doubled it on desktop. It stays in the DOM, v-show kept. -->
       <Transition name="fl-newreq">
         <Button
           v-show="!searchOpenMobile"
-          class="h-10 px-4 rounded-lg text-[15px] font-heading font-semibold"
+          class="hidden h-10 px-4 rounded-lg text-[15px] font-heading font-semibold"
           data-fdl-action="feedback_composer_open"
           data-fdl-source="toolbar"
           @click="emit('new-request')"
