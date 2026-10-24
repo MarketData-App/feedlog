@@ -32,6 +32,7 @@ const summaryFields: Record<string, readonly string[]> = {
   changelog: ['id', 'authorId', 'slug', 'status', 'title', 'categories', 'cover', 'publishedTitle', 'publishedCategories', 'publishedCover', 'publishedAt', 'createdAt', 'updatedAt', 'url', 'deleted'],
   comment: ['id', 'postId', 'parentId', 'replyToId', 'replyCount', 'likeCount', 'authorId', 'content', 'type', 'metadata', 'editedAt', 'createdAt', 'updatedAt', 'hasLiked', 'author', 'deleted', 'deletedCount'],
   portal_settings: ['portalUrl', 'helpCenterEnabled'],
+  status_notification: ['id', 'status', 'recipients'],
 }
 export function writeResult(value: Record<string, unknown>, target?: string) {
   const fields = ['organization_id', 'orgId', ...(summaryFields[target ?? ''] ?? [])]

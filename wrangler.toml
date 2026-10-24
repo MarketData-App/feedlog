@@ -116,7 +116,9 @@ EMAIL_FROM = "Market Data Roadmap <roadmap@contact.marketdata.app>"
 AUTH_EMAIL_ENABLED = "true"
 # contact.marketdata.app is a send-only domain: no email verification on staging.
 AUTH_EMAIL_VERIFY = "false"
-MCP_ENABLED = "false"
+# MCP on (selden, 2026-10-24): the board agent moves statuses through it.
+# Only a board team member with a password login can authorize an app.
+MCP_ENABLED = "true"
 EMAIL_ALLOWED_DOMAINS = "resend.dev,marketdata.app,contact.marketdata.app"
 NOINDEX = "true"
 # Every "Sign in" goes to the aMember feedlog-sso plugin (staging aMember),
