@@ -43,12 +43,13 @@ const links = computed(() => [
     :aria-label="$t('nav.boardBar')"
     class="board-bar md:sticky z-30 w-full border-b border-border bg-card/95 backdrop-blur-md"
   >
-    <div class="max-w-[1200px] mx-auto h-11 flex items-center justify-between gap-3 px-4 md:px-6 lg:px-10">
-      <ul class="flex items-center gap-4 sm:gap-6 min-w-0 overflow-x-auto [scrollbar-width:none]">
+    <div class="max-w-[1200px] mx-auto h-11 flex items-center justify-between gap-2 sm:gap-3 px-3 sm:px-4 md:px-6 lg:px-10">
+      <!-- Under sm (gap-2, px-3, 13px) the three links and the New Request button fit a 360px phone. -->
+      <ul class="flex items-center gap-2 sm:gap-6 min-w-0 overflow-x-auto [scrollbar-width:none]">
         <li v-for="item in links" :key="item.to" class="shrink-0">
           <NuxtLink
             :to="localePath(item.to)"
-            class="flex items-center gap-1.5 h-11 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors"
+            class="flex items-center gap-1.5 h-11 text-[13px] sm:text-sm font-semibold whitespace-nowrap border-b-2 transition-colors"
             :class="item.active ? 'text-foreground border-primary' : 'text-muted-foreground border-transparent hover:text-foreground'"
             :aria-current="item.active ? 'page' : undefined"
           >
