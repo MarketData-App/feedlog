@@ -125,8 +125,9 @@ NOINDEX = "true"
 # with return_to=<current URL>. Nuxt reads it at runtime as
 # runtimeConfig.public.ssoLoginUrl and sends it to the browser in the page.
 NUXT_PUBLIC_SSO_LOGIN_URL = "https://dashboard-staging.marketdata.app/marketdata/misc/feedlog-sso"
-# The changelog lives on the website: nav links there, /changelog redirects there.
-NUXT_PUBLIC_CHANGELOG_URL = "https://www.marketdata.app/changelog/"
+# The changelog lives on the board (selden, 2026-10-29): NUXT_PUBLIC_CHANGELOG_URL
+# stays unset, so the board serves /changelog itself. Setting it again makes
+# /changelog redirect to that address.
 # The marketdata.app site header on public pages: navigation, logo link and
 # sign-up go to the website; the account control asks staging aMember who is
 # logged in. Production: the same paths on https://dashboard.marketdata.app.

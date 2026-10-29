@@ -165,3 +165,10 @@ test('board home: only the board bar offers "New request"; the toolbar copy stay
   const bar = readFileSync(new URL('../app/components/BoardBar.vue', import.meta.url), 'utf8')
   assert.match(bar, /data-fdl-source="board-bar"/)
 })
+
+test('the board bar links the changelog on the board, and staging does not send it to the website', () => {
+  const bar = readFileSync(new URL('../app/components/BoardBar.vue', import.meta.url), 'utf8')
+  assert.match(bar, /key: 'nav\.changelog', to: '\/changelog'/)
+  const wrangler = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8')
+  assert.doesNotMatch(wrangler, /^NUXT_PUBLIC_CHANGELOG_URL\s*=/m)
+})

@@ -4,8 +4,8 @@ import { isBoardAdminRole } from '~/utils/board-admin'
 
 // MarketData: the board's own navigation, a slim bar under the marketdata.app
 // site header (which links only website pages). Feature Requests, Roadmap,
-// New request, and Admin for the org's owners and managers; plus the board's
-// language switch. Sign-in and the account live in the header's account
+// Changelog, New request, and Admin for the org's owners and managers; plus the
+// board's language switch. Sign-in and the account live in the header's account
 // control (default layout).
 const localePath = useLocalePath()
 const route = useRoute()
@@ -27,6 +27,9 @@ const baseName = computed(() => String(routeBaseName(route) ?? ''))
 const links = computed(() => [
   { key: 'nav.featureRequests', to: '/', icon: 'lucide:message-square', active: LIST_ROUTES.has(baseName.value) },
   { key: 'nav.roadmap', to: '/roadmap', icon: 'lucide:map', active: baseName.value === 'roadmap' },
+  // The changelog lives on the board (selden, 2026-10-29). With
+  // NUXT_PUBLIC_CHANGELOG_URL set, /changelog redirects to that address instead.
+  { key: 'nav.changelog', to: '/changelog', icon: 'lucide:megaphone', active: baseName.value.startsWith('changelog') },
   // Off on MarketData today; kept so enabling the module needs no layout change.
   ...(portalOrg.value.modules.helpCenter
     ? [{ key: 'nav.helpCenter', to: '/help', icon: 'lucide:book-open', active: baseName.value.startsWith('help') }]
