@@ -47,9 +47,59 @@ test('the notification emails do not name FeedLog, and show the Market Data name
     })
     assert.ok(mail, typeKey)
     assert.doesNotMatch(`${mail.subject}\n${mail.html}\n${mail.text}`, FEEDLOG, typeKey)
-    assert.match(mail.html, />Market Data</, typeKey)
+    assert.match(mail.html, /alt="Market Data"/, typeKey)
+    assert.match(mail.html, /The Market Data Team/, typeKey)
     assert.match(mail.text, /Market Data/, typeKey)
   }
+})
+
+// The layout of Market Data's own customer emails (Mautic, 2026-10-31).
+const allEmails = (): Record<string, string> => {
+  const out: Record<string, string> = { ...accountEmails }
+  for (const typeKey of ['post.status_changed', 'post.admin_replied', 'post.created', 'post.user_commented'])
+    out[typeKey] = renderNotificationEmail({ typeKey, postTitle: 'IV', postUrl: url, preferencesUrl: `${url}/prefs`, to: 'done', note: 'Shipped', snippet: 'x', actorName: 'Max' })!.html
+  return out
+}
+
+test('every email has the Market Data logo, the #003286 button colour and the current footer', () => {
+  for (const [name, html] of Object.entries(allEmails())) {
+    assert.match(html, /marketing\.marketdata\.app\/marketdata\/media\/images\/logos\/marketdatalogo1\.png/, name)
+    if (name !== 'passwordSet') assert.match(html, /background: #003286; border-radius: 6px;/, `${name}: the Market Data button`)
+    assert.match(html, /Montevideo 126, Buenos Aires \(1019\), Argentina/, name)
+    assert.match(html, new RegExp(`Market Data &copy; ${new Date().getUTCFullYear()}\\. All Rights Reserved\\.`), name)
+    assert.match(html, /https:\/\/x\.com\/MarketDataApp/, name)
+    assert.doesNotMatch(html, /t\.me\/|twitter\.com/, `${name}: no Telegram, no twitter.com (selden, 2026-10-30)`)
+    assert.doesNotMatch(html, /max-circle|max-signature/, `${name}: no sign-off as Max (selden, 2026-10-31)`)
+    assert.match(html, /support@marketdata\.app/, name)
+  }
+})
+
+test('the footer reason line fits the kind of email', () => {
+  const mails = allEmails()
+  for (const name of ['verification', 'reset', 'passwordSet'])
+    assert.match(mails[name]!, /because you have an account on the Market Data roadmap\./, name)
+  for (const name of ['post.status_changed', 'post.admin_replied'])
+    assert.match(mails[name]!, /because you follow this request on our roadmap\./, name)
+  for (const name of ['post.created', 'post.user_commented'])
+    assert.match(mails[name]!, /because you manage the Market Data roadmap\./, name)
+})
+
+test('a follower stops updates on the request page; a team member gets the notification settings', () => {
+  const follow = renderNotificationEmail({ typeKey: 'post.status_changed', postTitle: 'IV', postUrl: url, to: 'planned' })!
+  assert.match(follow.html, new RegExp(`href="${url}"[^>]*>Stop updates for this request<`))
+  assert.match(follow.text, /Stop updates for this request: https:\/\/roadmap-staging/)
+  const team = renderNotificationEmail({ typeKey: 'post.created', postTitle: 'IV', postUrl: url, preferencesUrl: `${url}/prefs`, snippet: 'x', actorName: 'Ann' })!
+  assert.match(team.html, />Manage email notifications</)
+  assert.doesNotMatch(team.html, /Stop updates for this request/)
+})
+
+test('a status note shows as a note from the team, escaped', () => {
+  const mail = renderNotificationEmail({ typeKey: 'post.status_changed', postTitle: '<b>IV</b>', postUrl: url, to: 'done', note: 'Live <script>' })!
+  assert.match(mail.html, /A note from the Market Data team/)
+  assert.match(mail.html, /Live &lt;script&gt;/)
+  assert.match(mail.html, /&lt;b&gt;IV&lt;\/b&gt;/)
+  assert.doesNotMatch(mail.html, /<script>/)
+  assert.match(mail.text, /A note from the Market Data team:\nLive <script>/)
 })
 
 test('no email subject in the server names FeedLog', () => {

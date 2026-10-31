@@ -1,63 +1,132 @@
 // Email HTML templates — auto-imported by Nitro.
 import { STATUS_CONFIG } from '../../shared/types/post'
-import { normalizeBrandHex, pickBrandForegroundHex } from '../../shared/utils/branding'
 
-// MarketData: the name, colour and contact in every email, in place of FeedLog's.
+// MarketData: every email uses the layout of Market Data's own customer emails
+// (the Stripo layout in Mautic, sent to us by the marketing agent on 2026-10-31):
+// a white 600px card on #FAFAFA, the logo and the text menu, Arial #333333, the
+// #003286 button, and the newsletter footer (social icons, copyright, address,
+// Website / Privacy / Terms, a reason line). No sign-off as Max (selden,
+// 2026-10-31): every email signs as the Market Data Team. Replies to the sender
+// address are not read, so the emails point to the support address instead.
 // EMAIL_BOARD_NAME matches the board's page title ("<org> Feedback").
 export const EMAIL_BRAND = 'Market Data'
 export const EMAIL_BOARD_NAME = 'Market Data Feedback'
 const SUPPORT_EMAIL = 'support@marketdata.app'
 const SITE_URL = 'https://www.marketdata.app'
-const BRAND_COLOR = '#1447E6'
-const FONT_STACK = `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`
+const FONT_STACK = `arial, 'helvetica neue', helvetica, sans-serif`
+const TEXT = '#333333'
+const MUTED = '#666666'
+const FAINT = '#999999'
+const RULE = '#CCCCCC'
+const PAGE = '#FAFAFA'
+const BUTTON = '#003286'
+const LINK = '#5C68E2'
+const LOGO_URL = 'https://marketing.marketdata.app/marketdata/media/images/logos/marketdatalogo1.png'
+const MENU: Array<[string, string]> = [
+  ['Sheets', `${SITE_URL}/sheets-addon/`],
+  ['API', `${SITE_URL}/docs/api`],
+  ['Docs', `${SITE_URL}/docs/`],
+  ['Tutorials', `${SITE_URL}/tutorials/`],
+]
+const SOCIAL_ICONS = 'https://marketing.marketdata.app/marketdata/media/images/social'
+const SOCIAL: Array<[string, string, string]> = [
+  ['Facebook', 'https://www.facebook.com/MarketDataApp/', `${SOCIAL_ICONS}/facebook-logo-black.png`],
+  ['X', 'https://x.com/MarketDataApp', 'https://uuuhiq.stripocdn.email/content/assets/img/social-icons/logo-black/x-logo-black.png'],
+  ['Instagram', 'https://www.instagram.com/marketdata.app/', `${SOCIAL_ICONS}/instagram-logo-black.png`],
+  ['YouTube', 'https://www.youtube.com/channel/UCtMeqaVWugbYyCYIAKlyC6Q', `${SOCIAL_ICONS}/youtube-logo-black.png`],
+  ['Reddit', 'https://www.reddit.com/r/MarketDataApp/', `${SOCIAL_ICONS}/reddit-logo-black.png`],
+  ['Discord', 'https://discord.gg/GmdeAVRtnT', `${SOCIAL_ICONS}/discord-logo-black.png`],
+]
+const ADDRESS = 'Montevideo 126, Buenos Aires (1019), Argentina'
+
+// The reason line of the footer, one per kind of email (selden, 2026-10-31).
+export const REASON_FOLLOW = 'You received this email because you follow this request on our roadmap.'
+export const REASON_ACCOUNT = 'You received this email because you have an account on the Market Data roadmap.'
+export const REASON_TEAM = 'You received this email because you manage the Market Data roadmap.'
+const REASON_INVITE = 'You received this email because the Market Data team invited you to manage its roadmap.'
 
 export function renderInboxReplyEmail({ reply, productName, topic, url }: { reply: string; productName: string; topic: string; url?: string }) {
   const intro = topic ? `You have a reply about ${topic} from ${productName}.` : `You have a reply from ${productName}.`
   const hint = `Open the support chat in ${productName} to reply.`
   const text = [intro, reply, url ? `Continue conversation: ${url}` : '', hint].filter(Boolean).join('\n\n')
-  return { text, html: layout({ brandName: productName, preheader: intro, content: `<p>${escapeHtml(intro)}</p><p style="white-space:pre-wrap">${escapeHtml(reply)}</p>${url ? actionButton(escapeHtml(url), 'Continue conversation') : ''}<p>${escapeHtml(hint)}</p>` }) }
+  return { text, html: layout({ preheader: intro, reason: REASON_ACCOUNT, content: `${paragraph(escapeHtml(intro))}<p style="${P_STYLE} white-space: pre-wrap;">${escapeHtml(reply)}</p>${url ? actionButton(escapeHtml(url), 'Continue conversation') : ''}${paragraph(escapeHtml(hint))}` }) }
 }
 
-function layout({ preheader, content, brandName }: { preheader: string; content: string; brandName?: string }): string {
+const P_STYLE = `margin: 0 0 14px; font-family: ${FONT_STACK}; font-size: 14px; line-height: 21px; color: ${TEXT};`
+
+function paragraph(html: string): string {
+  return `<p style="${P_STYLE}">${html}</p>`
+}
+
+function heading(text: string): string {
+  return `<h3 style="margin: 0 0 16px; font-family: ${FONT_STACK}; font-size: 20px; line-height: 24px; font-weight: bold; color: ${TEXT};">${text}</h3>`
+}
+
+function textLink(url: string, label: string): string {
+  return `<a href="${url}" style="color: ${LINK}; text-decoration: underline;">${label}</a>`
+}
+
+// The shared chrome: logo, menu, the content card, the sign-off, the footer.
+// `unsubscribe` is the last footer link (a request page or the notification settings).
+function shell({ preheader, content, reason, unsubscribe }: { preheader: string; content: string; reason: string; unsubscribe?: { url: string; label: string } }): string {
+  const menu = MENU.map(([label, url]) => `<a href="${url}" style="font-family: ${FONT_STACK}; font-size: 14px; color: ${TEXT}; text-decoration: none; padding: 0 12px;">${label}</a>`).join('')
+  const social = SOCIAL.map(([label, url, icon]) => `<a href="${url}" style="text-decoration: none; padding: 0 6px;"><img src="${icon}" width="24" height="24" alt="${label}" title="${label}" style="border: 0; display: inline-block; vertical-align: middle;"></a>`).join('')
+  const small = `margin: 0 0 6px; font-family: ${FONT_STACK}; font-size: 12px; line-height: 18px; color: ${FAINT};`
+  const footerLink = (url: string, label: string) => `<a href="${url}" style="color: ${FAINT}; text-decoration: underline;">${label}</a>`
   return `
-<div style="font-family: ${FONT_STACK}; max-width: 600px; margin: 0 auto; padding: 32px 24px; color: #111827; line-height: 1.55;">
-  <div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">${brandName ? escapeHtml(preheader) : preheader}</div>
-  <div style="padding-bottom: 20px; border-bottom: 1px solid #e5e7eb; margin-bottom: 24px;">
-    <span style="font-size: 20px; font-weight: 700; color: ${BRAND_COLOR}; letter-spacing: -0.01em;">${escapeHtml(brandName || EMAIL_BRAND)}</span>
-  </div>
-  ${content}
-  ${brandName ? `<p style="border-top: 1px solid #e5e7eb; padding-top: 20px; color: #6b7280; font-size: 13px;">&mdash; ${escapeHtml(brandName)} Support</p>` : signature()}
-</div>
-`
+<div style="margin: 0; padding: 0; background: ${PAGE};">
+  <div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">${escapeHtml(preheader)}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background: ${PAGE};">
+    <tr><td align="center" style="padding: 20px 10px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width: 100%; max-width: 600px; background: #FFFFFF;">
+        <tr><td align="center" style="padding: 24px 20px 12px;">
+          <a href="${SITE_URL}/" style="text-decoration: none;"><img src="${LOGO_URL}" width="200" alt="${EMAIL_BRAND}" style="display: block; border: 0; width: 200px; max-width: 100%; height: auto;"></a>
+        </td></tr>
+        <tr><td align="center" style="padding: 8px 20px 18px; border-bottom: 1px solid ${RULE};">${menu}</td></tr>
+        <tr><td align="left" style="padding: 30px 40px 10px; font-family: ${FONT_STACK}; font-size: 14px; line-height: 21px; color: ${TEXT};">
+${content}
+        </td></tr>
+        <tr><td align="left" style="padding: 10px 40px 30px;">
+          <p style="margin: 0; font-family: ${FONT_STACK}; font-size: 14px; line-height: 21px; color: ${TEXT};">The ${EMAIL_BRAND} Team</p>
+          <p style="margin: 6px 0 0; font-family: ${FONT_STACK}; font-size: 12px; line-height: 18px; color: ${MUTED};">Questions? Write to ${textLink(`mailto:${SUPPORT_EMAIL}`, SUPPORT_EMAIL)}.</p>
+        </td></tr>
+      </table>
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width: 100%; max-width: 600px;">
+        <tr><td align="center" style="padding: 24px 20px 10px;">${social}</td></tr>
+        <tr><td align="center" style="padding: 0 20px 20px;">
+          <p style="${small}">${EMAIL_BRAND} &copy; ${new Date().getUTCFullYear()}. All Rights Reserved.</p>
+          <p style="${small}">${ADDRESS}</p>
+          <p style="${small}">${footerLink(`${SITE_URL}/`, 'Website')} &nbsp;&middot;&nbsp; ${footerLink(`${SITE_URL}/privacy/`, 'Privacy')} &nbsp;&middot;&nbsp; ${footerLink(`${SITE_URL}/terms/`, 'Terms')}</p>
+          <p style="${small}">${reason}</p>
+          ${unsubscribe ? `<p style="${small}">${footerLink(escapeHtml(unsubscribe.url), unsubscribe.label)}</p>` : ''}
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</div>`
+}
+
+// The account emails (verification, invitation, password).
+function layout({ preheader, content, reason }: { preheader: string; content: string; reason: string }): string {
+  return shell({ preheader, content, reason })
 }
 
 function actionButton(url: string, label: string): string {
-  return `<a href="${url}" style="display: inline-block; padding: 12px 24px; background: ${BRAND_COLOR}; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600;">${label}</a>`
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin: 10px 0 14px;"><tr><td style="background: ${BUTTON}; border-radius: 6px;">
+  <a href="${url}" style="display: inline-block; padding: 10px 30px; font-family: ${FONT_STACK}; font-size: 20px; line-height: 24px; color: #FFFFFF; text-decoration: none; border-radius: 6px;">${label}</a>
+</td></tr></table>`
 }
 
 function fallbackLink(url: string): string {
   const shown = url.length <= 80 ? url : `${url.slice(0, 80)}...`
   return `
-<p style="color: #6b7280; margin: 24px 0 4px; font-size: 13px;">Button not working? Paste this link into your browser:</p>
-<p style="margin: 0 0 24px; font-size: 12px; word-break: break-all;">
-  <a href="${url}" style="color: ${BRAND_COLOR}; text-decoration: underline;">${shown}</a>
-</p>
+<p style="margin: 14px 0 4px; font-family: ${FONT_STACK}; font-size: 12px; line-height: 18px; color: ${MUTED};">Button not working? Paste this link into your browser:</p>
+<p style="margin: 0 0 14px; font-family: ${FONT_STACK}; font-size: 12px; line-height: 18px; word-break: break-all;">${textLink(url, shown)}</p>
 `
 }
 
 function expiryNote(text: string): string {
-  return `<p style="color: #6b7280; margin: 0 0 24px; font-size: 13px;">${text}</p>`
-}
-
-function signature(): string {
-  return `
-<div style="border-top: 1px solid #e5e7eb; padding-top: 20px; color: #6b7280; font-size: 13px;">
-  &mdash; The ${EMAIL_BRAND} Team<br>
-  <a href="${SITE_URL}" style="color: #6b7280; text-decoration: underline;">marketdata.app</a>
-  &middot;
-  <a href="mailto:${SUPPORT_EMAIL}" style="color: #6b7280; text-decoration: underline;">${SUPPORT_EMAIL}</a>
-</div>
-`
+  return `<p style="margin: 0 0 14px; font-family: ${FONT_STACK}; font-size: 12px; line-height: 18px; color: ${MUTED};">${text}</p>`
 }
 
 // --- Templates ---
@@ -65,18 +134,19 @@ function signature(): string {
 export function renderVerificationEmail({ url, name }: { url: string; name: string }): string {
   return layout({
     preheader: 'One click to activate · link expires in 1 hour.',
+    reason: REASON_ACCOUNT,
     content: `
-<h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600;">Confirm your email to get started</h2>
-<p style="margin: 0 0 12px;">Hi ${escapeHtml(name)},</p>
-<p style="margin: 0 0 12px;">Confirm your email to activate your ${EMAIL_BOARD_NAME} account and start:</p>
-<ul style="margin: 0 0 24px; padding-left: 20px; color: #374151;">
-  <li style="margin-bottom: 4px;">Voting on features you care about</li>
-  <li style="margin-bottom: 4px;">Submitting feedback and ideas</li>
-  <li>Following updates on what ships next</li>
+${heading('Confirm your email to get started')}
+${paragraph(`Hi ${escapeHtml(name)},`)}
+${paragraph(`Confirm your email to activate your account on the ${EMAIL_BRAND} roadmap. Then you can:`)}
+<ul style="margin: 0 0 14px; padding-left: 20px; font-family: ${FONT_STACK}; font-size: 14px; line-height: 21px; color: ${TEXT};">
+  <li style="margin-bottom: 4px;">Vote on the features you care about</li>
+  <li style="margin-bottom: 4px;">Send us requests and ideas</li>
+  <li>Follow what we build next</li>
 </ul>
-${actionButton(url, 'Confirm Email')}
+${actionButton(url, 'Confirm email')}
 ${fallbackLink(url)}
-${expiryNote(`This link expires in 1 hour. If you didn't sign up for ${EMAIL_BOARD_NAME}, you can safely ignore this email.`)}
+${expiryNote(`This link expires in 1 hour. If you did not sign up on the ${EMAIL_BRAND} roadmap, you can ignore this email.`)}
 `,
   })
 }
@@ -84,12 +154,13 @@ ${expiryNote(`This link expires in 1 hour. If you didn't sign up for ${EMAIL_BOA
 export function renderInvitationEmail({ url, orgName }: { url: string; orgName: string }): string {
   return layout({
     preheader: `You're invited to join ${escapeHtml(orgName)} on the feedback board.`,
+    reason: REASON_INVITE,
     content: `
-<h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600;">Join ${escapeHtml(orgName)} on the feedback board</h2>
-<p style="margin: 0 0 12px;">You've been invited to collaborate. Click below to accept and get started:</p>
+${heading(`Join ${escapeHtml(orgName)} on the roadmap`)}
+${paragraph('You are invited to help manage the roadmap. Click the button to accept:')}
 ${actionButton(url, 'Accept invitation')}
 ${fallbackLink(url)}
-${expiryNote('This invitation link is tied to your email. If you weren\'t expecting it, you can safely ignore this message.')}
+${expiryNote('This invitation link works only with your email address. If you did not expect it, you can ignore this email.')}
 `,
   })
 }
@@ -97,35 +168,33 @@ ${expiryNote('This invitation link is tied to your email. If you weren\'t expect
 export function renderResetPasswordEmail({ url, name }: { url: string; name: string }): string {
   return layout({
     preheader: 'A password reset was requested for your account. If it wasn\'t you, ignore this email.',
+    reason: REASON_ACCOUNT,
     content: `
-<h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600;">Reset your password</h2>
-<p style="margin: 0 0 12px;">Hi ${escapeHtml(name)},</p>
-<p style="margin: 0 0 24px;">Someone requested a password reset for your ${EMAIL_BOARD_NAME} account. If this was you, click the button below to set a new password:</p>
-${actionButton(url, 'Reset Password')}
+${heading('Reset your password')}
+${paragraph(`Hi ${escapeHtml(name)},`)}
+${paragraph(`Somebody asked to reset the password of your account on the ${EMAIL_BRAND} roadmap. If this was you, click the button to set a new password:`)}
+${actionButton(url, 'Reset password')}
 ${fallbackLink(url)}
-${expiryNote('This link expires in 1 hour and can only be used once.')}
-<div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-bottom: 24px;">
-  <p style="margin: 0 0 12px; font-weight: 600; color: #111827;">Didn't request this?</p>
-  <p style="margin: 0 0 12px; color: #374151;">You can safely ignore this email &mdash; your password won't change unless you click the link above.</p>
-</div>
+${expiryNote('This link expires in 1 hour and works only once.')}
+${paragraph('<strong>Did not ask for this?</strong> You can ignore this email. Your password does not change unless you click the link.')}
 `,
   })
 }
 
 export function renderPasswordSetEmail({ name }: { name: string }): string {
-  const contact = `<a href="mailto:${SUPPORT_EMAIL}" style="color: ${BRAND_COLOR}; text-decoration: underline;">${SUPPORT_EMAIL}</a>`
   return layout({
     preheader: 'If this wasn\'t you, reset your password immediately.',
+    reason: REASON_ACCOUNT,
     content: `
-<h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600;">A password was added to your account</h2>
-<p style="margin: 0 0 16px;">Hi ${escapeHtml(name)},</p>
-<p style="margin: 0 0 16px;">A password was just added to your ${EMAIL_BOARD_NAME} account. You can now sign in with email and password in addition to your existing sign-in.</p>
-<p style="margin: 0 0 24px; color: #374151;">If this wasn't you, reset your password right away and contact ${contact}.</p>
+${heading('A password was added to your account')}
+${paragraph(`Hi ${escapeHtml(name)},`)}
+${paragraph(`A password was added to your account on the ${EMAIL_BRAND} roadmap. You can now also sign in with your email and this password.`)}
+${paragraph(`If this was not you, reset your password now and write to ${textLink(`mailto:${SUPPORT_EMAIL}`, SUPPORT_EMAIL)}.`)}
 `,
   })
 }
 
-// --- Notification templates (English only, Featurebase-style) ---
+// --- Notification templates (English only) ---
 
 // User-authored text (titles, notes, comment snippets) enters the HTML body
 // here, so every interpolation is escaped.
@@ -139,48 +208,30 @@ export interface NotificationEmailContent {
   text: string
 }
 
-const FOOTER_REASON = `You're receiving this because of your activity on ${EMAIL_BOARD_NAME}.`
-const ADMIN_FOOTER_REASON = `You're receiving this because you manage ${EMAIL_BOARD_NAME}.`
-
-// Gray page → centered brand wordmark → white rounded card → centered footer.
-function notificationShell(cardInner: string, preheader: string, footerReason: string, preferencesUrl?: string): string {
-  return `
-<div style="background: #f6f7fb; padding: 40px 16px; font-family: ${FONT_STACK};">
-  <div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">${escapeHtml(preheader)}</div>
-  <div style="max-width: 560px; margin: 0 auto;">
-    <div style="text-align: center; padding-bottom: 28px;">
-      <span style="font-size: 22px; font-weight: 800; color: {{brand}}; letter-spacing: -0.02em;">${EMAIL_BRAND}</span>
-    </div>
-    <div style="background: #fff; border: 1px solid #eceef3; border-radius: 16px; padding: 40px 36px;">
-${cardInner}
-    </div>
-    <div style="text-align: center; padding: 24px 8px 0; color: #9ca3af; font-size: 12px; line-height: 1.6;">
-      <p style="margin: 0;">${footerReason}</p>
-      ${preferencesUrl ? `<p style="margin: 8px 0 0;"><a href="${escapeHtml(preferencesUrl)}" style="color: #6b7280; text-decoration: underline;">Manage email notifications</a></p>` : ''}
-    </div>
-  </div>
-</div>`
-}
-
-function pillButton(url: string, label: string): string {
-  return `<div style="text-align: center; margin-top: 32px;"><a href="${url}" style="display: inline-block; padding: 14px 40px; background: {{brand}}; color: {{brandFg}}; text-decoration: none; border-radius: 999px; font-weight: 700; font-size: 16px;">${label}</a></div>`
+function centeredButton(url: string, label: string): string {
+  return `<div style="text-align: center; margin-top: 24px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin: 0 auto;"><tr><td style="background: ${BUTTON}; border-radius: 6px;">
+  <a href="${url}" style="display: inline-block; padding: 10px 30px; font-family: ${FONT_STACK}; font-size: 20px; line-height: 24px; color: #FFFFFF; text-decoration: none; border-radius: 6px;">${label}</a>
+</td></tr></table></div>`
 }
 
 function statusChangeCard(title: string, to: string, note?: string): NotificationEmailContent {
   const cfg = STATUS_CONFIG[to as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.open
   const label = cfg.label
+  // The note shows as a quote from the team, with no photo or personal sign-off.
   const noteHtml = note
-    ? `<p style="margin: 20px 0 0; text-align: center; font-size: 15px; color: #6b7280; line-height: 1.7;">${escapeHtml(note)}</p>`
+    ? `<div style="margin: 20px 0 0; padding: 12px 16px; background: ${PAGE}; border-left: 3px solid ${BUTTON};">
+        <p style="margin: 0 0 6px; font-family: ${FONT_STACK}; font-size: 12px; line-height: 18px; color: ${MUTED}; font-weight: bold;">A note from the ${EMAIL_BRAND} team</p>
+        <p style="margin: 0; font-family: ${FONT_STACK}; font-size: 14px; line-height: 21px; color: ${TEXT}; white-space: pre-wrap;">${escapeHtml(note)}</p>
+      </div>`
     : ''
   const inner = `
-      <p style="margin: 0; text-align: center; font-size: 20px; line-height: 1.5; color: #1f2937;">
-        A post you upvoted, <strong style="color: #111827;">${escapeHtml(title)}</strong>, has been changed to <span style="color: ${cfg.color}; font-weight: 700;">${label}</span>
-      </p>${noteHtml}
-      ${pillButton('{{postUrl}}', 'View post')}`
+      ${heading('Your request has an update')}
+      <p style="${P_STYLE}">A request that you follow, <strong>${escapeHtml(title)}</strong>, is now <span style="color: ${cfg.color}; font-weight: bold;">${label}</span>.</p>${noteHtml}
+      ${centeredButton('{{postUrl}}', 'View the request')}`
   return {
     subject: `${label} - "${title}"`,
     html: inner,
-    text: `A post you upvoted, ${title}, has been changed to ${label}.${note ? `\n\n${note}` : ''}`,
+    text: `A request that you follow, ${title}, is now ${label}.${note ? `\n\nA note from the ${EMAIL_BRAND} team:\n${note}` : ''}`,
   }
 }
 
@@ -190,23 +241,23 @@ function personCard(title: string, actorName: string, actorImage: string | null 
   const safeImage = actorImage && /^https?:\/\//i.test(actorImage) ? actorImage : null
   const avatar = safeImage
     ? `<img src="${escapeHtml(safeImage)}" width="40" height="40" style="border-radius: 999px; display: block;" alt="">`
-    : `<div style="width: 40px; height: 40px; border-radius: 999px; background: {{brand}}; color: {{brandFg}}; font-size: 16px; font-weight: 700; text-align: center; line-height: 40px;">${escapeHtml(initial)}</div>`
+    : `<div style="width: 40px; height: 40px; border-radius: 999px; background: ${BUTTON}; color: #FFFFFF; font-family: ${FONT_STACK}; font-size: 16px; font-weight: bold; text-align: center; line-height: 40px;">${escapeHtml(initial)}</div>`
   return `
-      <p style="margin: 0 0 20px; font-size: 17px; font-weight: 700; color: #111827; line-height: 1.4;">${escapeHtml(title)}</p>
-      <table cellpadding="0" cellspacing="0" style="width: 100%;"><tr>
-        <td width="48" valign="top">${avatar}</td>
-        <td valign="top" style="padding-left: 4px;">
-          <div style="font-size: 16px; font-weight: 700; color: #111827; margin-bottom: 4px;">${escapeHtml(actorName)}</div>
-          <div style="font-size: 15px; color: #6b7280; line-height: 1.7;">${escapeHtml(snippet)}</div>
+      ${heading(escapeHtml(title))}
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%;"><tr>
+        <td width="52" valign="top">${avatar}</td>
+        <td valign="top">
+          <div style="font-family: ${FONT_STACK}; font-size: 14px; font-weight: bold; color: ${TEXT}; margin-bottom: 4px;">${escapeHtml(actorName)}</div>
+          <div style="font-family: ${FONT_STACK}; font-size: 14px; line-height: 21px; color: ${MUTED}; white-space: pre-wrap;">${escapeHtml(snippet)}</div>
         </td>
       </tr></table>
-      ${pillButton('{{postUrl}}', buttonLabel)}`
+      ${centeredButton('{{postUrl}}', buttonLabel)}`
 }
 
 function adminReplyCard(title: string, actorName: string, actorImage: string | null | undefined, snippet: string): NotificationEmailContent {
   return {
     subject: `New comment for "${title}"`,
-    html: personCard(title, actorName, actorImage, snippet, 'View comment'),
+    html: personCard(title, actorName, actorImage, snippet, 'View the comment'),
     text: `${actorName} commented on "${title}":\n\n${snippet}`,
   }
 }
@@ -214,7 +265,7 @@ function adminReplyCard(title: string, actorName: string, actorImage: string | n
 function newFeedbackCard(title: string, actorName: string, actorImage: string | null | undefined, snippet: string): NotificationEmailContent {
   return {
     subject: `New feedback: "${title}"`,
-    html: personCard(title, actorName, actorImage, snippet, 'View feedback'),
+    html: personCard(title, actorName, actorImage, snippet, 'View the request'),
     text: `${actorName} submitted new feedback, "${title}":\n\n${snippet}`,
   }
 }
@@ -222,13 +273,14 @@ function newFeedbackCard(title: string, actorName: string, actorImage: string | 
 function userCommentCard(title: string, actorName: string, actorImage: string | null | undefined, snippet: string): NotificationEmailContent {
   return {
     subject: `New reply on "${title}"`,
-    html: personCard(title, actorName, actorImage, snippet, 'View comment'),
+    html: personCard(title, actorName, actorImage, snippet, 'View the comment'),
     text: `${actorName} replied on "${title}":\n\n${snippet}`,
   }
 }
 
 // Dispatch a notification to its template. Returns null for an unknown type so
-// the caller logs it rather than sending a blank email.
+// the caller logs it rather than sending a blank email. `brandColor` is still
+// accepted from the callers; the email uses the Market Data email button colour.
 export function renderNotificationEmail(input: {
   typeKey: string
   postTitle?: string
@@ -244,7 +296,7 @@ export function renderNotificationEmail(input: {
   const title = input.postTitle || 'your post'
   let card: NotificationEmailContent | null = null
   let preheader = ''
-  let footerReason = FOOTER_REASON
+  let reason = REASON_FOLLOW
 
   switch (input.typeKey) {
     case 'post.status_changed': {
@@ -260,23 +312,24 @@ export function renderNotificationEmail(input: {
     case 'post.created':
       card = newFeedbackCard(title, input.actorName ?? 'Someone', input.actorImage, input.snippet ?? '')
       preheader = `New feedback on your board: "${title}".`
-      footerReason = ADMIN_FOOTER_REASON
+      reason = REASON_TEAM
       break
     case 'post.user_commented':
       card = userCommentCard(title, input.actorName ?? 'Someone', input.actorImage, input.snippet ?? '')
       preheader = `A new reply on "${title}".`
-      footerReason = ADMIN_FOOTER_REASON
+      reason = REASON_TEAM
       break
     default:
       return null
   }
 
-  const brand = normalizeBrandHex(input.brandColor)
-  const preferencesUrl = input.typeKey === 'post.created' || input.typeKey === 'post.user_commented'
-    ? input.preferencesUrl : undefined
-  const html = notificationShell(card.html.replaceAll('{{postUrl}}', escapeHtml(input.postUrl)), preheader, footerReason, preferencesUrl)
-    .replaceAll('{{brand}}', brand)
-    .replaceAll('{{brandFg}}', pickBrandForegroundHex(brand))
-  const text = `${card.text}\n\nView: ${input.postUrl}\n\n—\n${footerReason}${preferencesUrl ? `\nManage email notifications: ${preferencesUrl}` : ''}`
+  // A follower stops the updates on the request page (its Subscribe button); a
+  // team member manages them in the notification settings.
+  const team = reason === REASON_TEAM
+  const unsubscribe = team
+    ? (input.preferencesUrl ? { url: input.preferencesUrl, label: 'Manage email notifications' } : undefined)
+    : { url: input.postUrl, label: 'Stop updates for this request' }
+  const html = shell({ preheader, reason, unsubscribe, content: card.html.replaceAll('{{postUrl}}', escapeHtml(input.postUrl)) })
+  const text = `${card.text}\n\nView: ${input.postUrl}\n\nThe ${EMAIL_BRAND} Team\nQuestions? Write to ${SUPPORT_EMAIL}.\n\n—\n${reason}${unsubscribe ? `\n${unsubscribe.label}: ${unsubscribe.url}` : ''}`
   return { subject: card.subject, html, text }
 }
