@@ -1,4 +1,5 @@
 import { strict as assert } from 'node:assert'
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { IncomingMessage, ServerResponse } from 'node:http'
 import { Socket } from 'node:net'
@@ -281,4 +282,32 @@ test('set-password refuses an SSO or guest session before it touches the account
   finally {
     server.close()
   }
+})
+
+test('no guest posting: the guest switches stay off and the guest sign-in route refuses (selden, 2026-10-31)', async () => {
+  const { resolveGuestAccess } = await import('../shared/utils/guest')
+  assert.deepEqual(resolveGuestAccess({ guest: { allowPost: true, allowVote: true, allowComment: true } }),
+    { allowPost: false, allowVote: false, allowComment: false })
+  assert.deepEqual(resolveGuestAccess(JSON.stringify({ guest: { allowPost: true } })),
+    { allowPost: false, allowVote: false, allowComment: false })
+
+  const { anonymous } = await import('better-auth/plugins')
+  const auth = betterAuth({
+    baseURL: 'http://localhost:3000',
+    secret: 'test-better-auth-secret-0123456789abcdef',
+    database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
+    emailAndPassword: { enabled: true },
+    plugins: [signupAllowlist(), anonymous()],
+    logger: { disabled: true },
+  })
+  const res = await auth.handler(new Request('http://localhost:3000/api/auth/sign-in/anonymous', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: 'http://localhost:3000' },
+    body: '{}',
+  }))
+  assert.equal(res.status, 403)
+  assert.equal((await res.json()).code, 'GUEST_NOT_ALLOWED')
+
+  const page = readFileSync(new URL('../app/pages/dashboard/settings/workspace.vue', import.meta.url), 'utf8')
+  assert.doesNotMatch(page, /<GuestActionsSection/)
 })

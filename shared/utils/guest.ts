@@ -35,13 +35,11 @@ export function parseGuestAccess(metadata: OrgMetadataInput): GuestAccess {
   return result.success ? result.data : {}
 }
 
-export function resolveGuestAccess(metadata: OrgMetadataInput): ResolvedGuestAccess {
-  const parsed = parseGuestAccess(metadata)
-  return {
-    allowPost: parsed.allowPost ?? GUEST_ACCESS_DEFAULTS.allowPost,
-    allowVote: parsed.allowVote ?? GUEST_ACCESS_DEFAULTS.allowVote,
-    allowComment: parsed.allowComment ?? GUEST_ACCESS_DEFAULTS.allowComment,
-  }
+// MarketData: no guest posting, voting or commenting (selden, 2026-10-31: "no
+// guest posting allowed"; aMember is the only customer identity). The org's guest
+// switches are ignored, so a saved `guest` key in the metadata cannot turn them on.
+export function resolveGuestAccess(_metadata: OrgMetadataInput): ResolvedGuestAccess {
+  return { ...GUEST_ACCESS_DEFAULTS }
 }
 
 export function mergeGuestAccessMetadata(

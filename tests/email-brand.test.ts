@@ -76,8 +76,11 @@ test('every email has the Market Data logo, the #003286 button colour and the cu
 
 test('the footer reason line fits the kind of email', () => {
   const mails = allEmails()
-  for (const name of ['verification', 'reset', 'passwordSet'])
-    assert.match(mails[name]!, /because you have an account on the Market Data roadmap\./, name)
+  // The password emails go only to the team login: customers have no roadmap password.
+  for (const name of ['verification', 'reset', 'passwordSet']) {
+    assert.match(mails[name]!, /because you manage the Market Data roadmap\./, name)
+    assert.match(mails[name]!, /team login/, name)
+  }
   for (const name of ['post.status_changed', 'post.admin_replied'])
     assert.match(mails[name]!, /because you follow this request on our roadmap\./, name)
   for (const name of ['post.created', 'post.user_commented'])

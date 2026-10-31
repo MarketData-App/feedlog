@@ -40,6 +40,10 @@ const SOCIAL: Array<[string, string, string]> = [
 const ADDRESS = 'Montevideo 126, Buenos Aires (1019), Argentina'
 
 // The reason line of the footer, one per kind of email (selden, 2026-10-31).
+// Customers never get a password email: they sign in only through aMember, and
+// sign-up, password reset and set-password are open only to the team login
+// (SYSTEM_ADMIN_EMAILS; see signup-allowlist.ts). So the password emails speak
+// to the team login and carry the team reason line.
 export const REASON_FOLLOW = 'You received this email because you follow this request on our roadmap.'
 export const REASON_ACCOUNT = 'You received this email because you have an account on the Market Data roadmap.'
 export const REASON_TEAM = 'You received this email because you manage the Market Data roadmap.'
@@ -133,20 +137,15 @@ function expiryNote(text: string): string {
 
 export function renderVerificationEmail({ url, name }: { url: string; name: string }): string {
   return layout({
-    preheader: 'One click to activate · link expires in 1 hour.',
-    reason: REASON_ACCOUNT,
+    preheader: 'Confirm the email of your team login · the link expires in 1 hour.',
+    reason: REASON_TEAM,
     content: `
-${heading('Confirm your email to get started')}
+${heading('Confirm the email of your team login')}
 ${paragraph(`Hi ${escapeHtml(name)},`)}
-${paragraph(`Confirm your email to activate your account on the ${EMAIL_BRAND} roadmap. Then you can:`)}
-<ul style="margin: 0 0 14px; padding-left: 20px; font-family: ${FONT_STACK}; font-size: 14px; line-height: 21px; color: ${TEXT};">
-  <li style="margin-bottom: 4px;">Vote on the features you care about</li>
-  <li style="margin-bottom: 4px;">Send us requests and ideas</li>
-  <li>Follow what we build next</li>
-</ul>
+${paragraph(`Confirm this email to finish your team login for the ${EMAIL_BRAND} roadmap (the board admin).`)}
 ${actionButton(url, 'Confirm email')}
 ${fallbackLink(url)}
-${expiryNote(`This link expires in 1 hour. If you did not sign up on the ${EMAIL_BRAND} roadmap, you can ignore this email.`)}
+${expiryNote('This link expires in 1 hour. If you did not make a team login, you can ignore this email. Customers sign in with their Market Data account and have no roadmap password.')}
 `,
   })
 }
@@ -168,11 +167,11 @@ ${expiryNote('This invitation link works only with your email address. If you di
 export function renderResetPasswordEmail({ url, name }: { url: string; name: string }): string {
   return layout({
     preheader: 'A password reset was requested for your account. If it wasn\'t you, ignore this email.',
-    reason: REASON_ACCOUNT,
+    reason: REASON_TEAM,
     content: `
-${heading('Reset your password')}
+${heading('Reset the password of your team login')}
 ${paragraph(`Hi ${escapeHtml(name)},`)}
-${paragraph(`Somebody asked to reset the password of your account on the ${EMAIL_BRAND} roadmap. If this was you, click the button to set a new password:`)}
+${paragraph(`Somebody asked to reset the password of your team login for the ${EMAIL_BRAND} roadmap. If this was you, click the button to set a new password:`)}
 ${actionButton(url, 'Reset password')}
 ${fallbackLink(url)}
 ${expiryNote('This link expires in 1 hour and works only once.')}
@@ -184,11 +183,11 @@ ${paragraph('<strong>Did not ask for this?</strong> You can ignore this email. Y
 export function renderPasswordSetEmail({ name }: { name: string }): string {
   return layout({
     preheader: 'If this wasn\'t you, reset your password immediately.',
-    reason: REASON_ACCOUNT,
+    reason: REASON_TEAM,
     content: `
-${heading('A password was added to your account')}
+${heading('A password was added to your team login')}
 ${paragraph(`Hi ${escapeHtml(name)},`)}
-${paragraph(`A password was added to your account on the ${EMAIL_BRAND} roadmap. You can now also sign in with your email and this password.`)}
+${paragraph(`A password was added to your team login for the ${EMAIL_BRAND} roadmap. You can now sign in at the team login with your email and this password.`)}
 ${paragraph(`If this was not you, reset your password now and write to ${textLink(`mailto:${SUPPORT_EMAIL}`, SUPPORT_EMAIL)}.`)}
 `,
   })
