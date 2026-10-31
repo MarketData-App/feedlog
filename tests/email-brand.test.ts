@@ -96,6 +96,9 @@ test('a follower stops updates on the request page; a team member gets the notif
   const follow = renderNotificationEmail({ typeKey: 'post.status_changed', postTitle: 'IV', postUrl: url, to: 'planned' })!
   assert.match(follow.html, new RegExp(`href="${url}"[^>]*>Stop updates for this request<`))
   assert.match(follow.text, /Stop updates for this request: https:\/\/roadmap-staging/)
+  // The stop link has its own line, under the reason line (selden 2026-10-31), in HTML and in text.
+  assert.match(follow.html, new RegExp(`on our roadmap\\.<br><a href="${url}"[^>]*>Stop updates for this request</a>\\.`))
+  assert.match(follow.text, /on our roadmap\.\nStop updates for this request: /)
   const team = renderNotificationEmail({ typeKey: 'post.created', postTitle: 'IV', postUrl: url, preferencesUrl: `${url}/prefs`, snippet: 'x', actorName: 'Ann' })!
   assert.match(team.html, />Manage email notifications</)
   assert.doesNotMatch(team.html, /Stop updates for this request/)
