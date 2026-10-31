@@ -9,6 +9,8 @@ import {
   renderVerificationEmail,
 } from '../server/utils/email-templates'
 import { formatEmailFrom } from '../server/utils/email'
+import { MAUTIC_TEMPLATE, MAUTIC_TEMPLATE_SHA256 } from '../server/utils/email-template-mautic'
+import { createHash } from 'node:crypto'
 
 // MarketData: no email names FeedLog or gives FeedLog's contact details.
 
@@ -47,8 +49,8 @@ test('the notification emails do not name FeedLog, and show the Market Data name
     })
     assert.ok(mail, typeKey)
     assert.doesNotMatch(`${mail.subject}\n${mail.html}\n${mail.text}`, FEEDLOG, typeKey)
-    assert.match(mail.html, /alt="Market Data"/, typeKey)
-    assert.match(mail.html, /The Market Data Team/, typeKey)
+    assert.match(mail.html, /Market Data/, typeKey)
+    assert.match(mail.html, /If you have any questions, write to/, typeKey)
     assert.match(mail.text, /Market Data/, typeKey)
   }
 })
@@ -61,12 +63,15 @@ const allEmails = (): Record<string, string> => {
   return out
 }
 
-test('every email has the Market Data logo, the #003286 button colour and the current footer', () => {
+test('every email is the Mautic template: logo, #003286 button, the current footer, no slot left', () => {
   for (const [name, html] of Object.entries(allEmails())) {
-    assert.match(html, /marketing\.marketdata\.app\/marketdata\/media\/images\/logos\/marketdatalogo1\.png/, name)
-    if (name !== 'passwordSet') assert.match(html, /background: #003286; border-radius: 6px;/, `${name}: the Market Data button`)
+    assert.ok(html.startsWith(MAUTIC_TEMPLATE.slice(0, MAUTIC_TEMPLATE.indexOf('<title>'))), `${name}: the template head`)
+    assert.doesNotMatch(html, /\{\{[A-Z_]+\}\}|<!--\/?OPTIONAL:/, `${name}: a slot or block marker is left`)
+    assert.match(html, /marketdatalogo1\.png/, name)
+    if (name !== 'passwordSet') assert.match(html, /background:#003286;border-width:0px;display:inline-block;border-radius:6px/, `${name}: the Market Data button`)
+    else assert.doesNotMatch(html, /class="ch"/, `${name}: no button`)
     assert.match(html, /Montevideo 126, Buenos Aires \(1019\), Argentina/, name)
-    assert.match(html, new RegExp(`Market Data &copy; ${new Date().getUTCFullYear()}\\. All Rights Reserved\\.`), name)
+    assert.match(html, new RegExp(`Market Data © ${new Date().getUTCFullYear()}\\. All Rights Reserved\\.`), name)
     assert.match(html, /https:\/\/x\.com\/MarketDataApp/, name)
     assert.doesNotMatch(html, /t\.me\/|twitter\.com/, `${name}: no Telegram, no twitter.com (selden, 2026-10-30)`)
     assert.doesNotMatch(html, /max-circle|max-signature/, `${name}: no sign-off as Max (selden, 2026-10-31)`)
@@ -129,4 +134,14 @@ test('customers get only status emails: no comment notifies subscribers (selden,
   for (const isTopLevel of [true, false])
     for (const authorIsAdmin of [true, false])
       assert.deepEqual(resolveCommentEvents({ isTopLevel, authorIsAdmin }), [], `top=${isTopLevel} admin=${authorIsAdmin}`)
+})
+
+test('the Mautic template module is intact (generated, sha256 of its source)', () => {
+  assert.equal(createHash('sha256').update(MAUTIC_TEMPLATE, 'utf8').digest('hex'), MAUTIC_TEMPLATE_SHA256)
+})
+
+test('button labels are in capitals, as in every Mautic transactional email', () => {
+  const mail = renderNotificationEmail({ typeKey: 'post.status_changed', postTitle: 'IV', postUrl: url, to: 'planned' })!
+  assert.match(mail.html, />VIEW THE REQUEST<\/a>/)
+  assert.match(renderResetPasswordEmail({ url, name: 'Max' }), />RESET PASSWORD<\/a>/)
 })
