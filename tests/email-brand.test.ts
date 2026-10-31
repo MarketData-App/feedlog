@@ -123,3 +123,10 @@ test('the fallback sender name is not FeedLog', () => {
   assert.doesNotMatch(formatEmailFrom('noreply@example.com'), FEEDLOG)
   assert.doesNotMatch(formatEmailFrom(undefined), FEEDLOG)
 })
+
+test('customers get only status emails: no comment notifies subscribers (selden, 2026-10-31)', async () => {
+  const { resolveCommentEvents } = await import('../shared/utils/notifications')
+  for (const isTopLevel of [true, false])
+    for (const authorIsAdmin of [true, false])
+      assert.deepEqual(resolveCommentEvents({ isTopLevel, authorIsAdmin }), [], `top=${isTopLevel} admin=${authorIsAdmin}`)
+})
