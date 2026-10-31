@@ -3,8 +3,7 @@ import { APIError, createAuthMiddleware } from 'better-auth/api'
 
 // MarketData: customers sign in through aMember (product SSO), so the only
 // email/password account is the board admin's. Email sign-up and password reset
-// are open only to an address in SYSTEM_ADMIN_EMAILS; sign-in stays open. Guest
-// (anonymous) sign-in is closed for everyone.
+// are open only to an address in SYSTEM_ADMIN_EMAILS; sign-in stays open.
 
 // Exact match against the comma list, case-insensitive. An unset or empty list
 // matches nobody.
@@ -56,18 +55,6 @@ export function signupAllowlist(): BetterAuthPlugin {
                 code: 'SIGNUP_NOT_ALLOWED',
               })
             }
-          }),
-        },
-        // No guest accounts (selden, 2026-10-31): the anonymous plugin stays
-        // installed for the code that reads isAnonymous, but nobody can mint a
-        // guest session.
-        {
-          matcher: context => context.path === '/sign-in/anonymous',
-          handler: createAuthMiddleware(async () => {
-            throw new APIError('FORBIDDEN', {
-              message: 'Sign in with your Market Data account.',
-              code: 'GUEST_NOT_ALLOWED',
-            })
           }),
         },
         {

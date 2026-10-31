@@ -106,7 +106,7 @@ function reset() {
             </div>
           </section>
 
-          <!-- MarketData: no guest switches. Guests may not post, vote or comment (selden, 2026-10-31). -->
+          <GuestActionsSection :org="org" :is-owner="isOwner" @saved="loadOrg" />
 
           <OrgBrandingSection :org="org" :is-owner="isOwner" @saved="loadOrg" />
         </template>
