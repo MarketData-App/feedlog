@@ -136,3 +136,43 @@ NUXT_PUBLIC_AMEMBER_API_URL = "https://dashboard-staging.marketdata.app/api/user
 NUXT_PUBLIC_AMEMBER_LOGIN_URL = "https://dashboard-staging.marketdata.app/marketdata/login"
 NUXT_PUBLIC_AMEMBER_LOGOUT_URL = "https://dashboard-staging.marketdata.app/marketdata/logout"
 NUXT_PUBLIC_AMEMBER_SIGNUP_URL = "https://dashboard-staging.marketdata.app/marketdata/signup"
+
+# MarketData production (feedback repo docs/runbooks/rollover.md, Part B).
+# Deploy: `pnpm deploy:production` (it sets CLOUDFLARE_ENV=production so the
+# build writes this block into .output/server/wrangler.json).
+# Migrate: `pnpm migrate:production` (database `neondb`), before each deploy.
+# Secrets: BETTER_AUTH_SECRET (not the staging value), RESEND_API_KEY,
+# SYSTEM_ADMIN_EMAILS. Set them with
+#   wrangler secret put <NAME> --config wrangler.toml --env production
+# The database is a copy of staging at the switch (selden, 2026-10-29).
+[env.production]
+name = "feedlog-production"
+workers_dev = false
+routes = [{ pattern = "roadmap.marketdata.app/*", zone_name = "marketdata.app" }]
+
+# Query cache off, as on staging (selden, 2026-10-23).
+[[env.production.hyperdrive]]
+binding = "POSTGRES"
+id = "3d7b3379a13e492f87bc10ec98cc620e"
+
+[[env.production.r2_buckets]]
+binding = "BLOB"
+bucket_name = "feedlog-production"
+
+[env.production.triggers]
+crons = ["0 3 * * *"]
+
+# Not set here, on purpose: AUTH_EMAIL_VERIFY (verification stays on),
+# EMAIL_ALLOWED_DOMAINS (status emails go to every customer), NOINDEX, and
+# the changelog redirect (the changelog lives on the board).
+[env.production.vars]
+BETTER_AUTH_URL = "https://roadmap.marketdata.app"
+EMAIL_FROM = "Market Data Roadmap <roadmap@contact.marketdata.app>"
+AUTH_EMAIL_ENABLED = "true"
+MCP_ENABLED = "true"
+NUXT_PUBLIC_SSO_LOGIN_URL = "https://dashboard.marketdata.app/marketdata/misc/feedlog-sso"
+NUXT_PUBLIC_WEBSITE_URL = "https://www.marketdata.app"
+NUXT_PUBLIC_AMEMBER_API_URL = "https://dashboard.marketdata.app/api/user/"
+NUXT_PUBLIC_AMEMBER_LOGIN_URL = "https://dashboard.marketdata.app/marketdata/login"
+NUXT_PUBLIC_AMEMBER_LOGOUT_URL = "https://dashboard.marketdata.app/marketdata/logout"
+NUXT_PUBLIC_AMEMBER_SIGNUP_URL = "https://dashboard.marketdata.app/marketdata/signup"

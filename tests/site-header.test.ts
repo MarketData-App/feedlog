@@ -172,3 +172,18 @@ test('the board bar links the changelog on the board, and staging does not send 
   const wrangler = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8')
   assert.doesNotMatch(wrangler, /^NUXT_PUBLIC_CHANGELOG_URL\s*=/m)
 })
+
+test('production settings: production aMember, no staging-only switches, no changelog redirect', () => {
+  const wrangler = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8')
+  const start = wrangler.indexOf('[env.production]')
+  assert.ok(start >= 0, '[env.production] block found')
+  const block = wrangler.slice(start)
+  assert.match(block, /^name = "feedlog-production"$/m)
+  assert.match(block, /^workers_dev = false$/m)
+  assert.match(block, /pattern = "roadmap\.marketdata\.app\/\*"/)
+  assert.match(block, /^BETTER_AUTH_URL = "https:\/\/roadmap\.marketdata\.app"$/m)
+  assert.match(block, /^NUXT_PUBLIC_SSO_LOGIN_URL = "https:\/\/dashboard\.marketdata\.app\/marketdata\/misc\/feedlog-sso"$/m)
+  for (const key of ['AUTH_EMAIL_VERIFY', 'EMAIL_ALLOWED_DOMAINS', 'NOINDEX', 'NUXT_PUBLIC_CHANGELOG_URL'])
+    assert.doesNotMatch(block, new RegExp(`^${key}\\s*=`, 'm'), `${key} is not set on production`)
+  assert.doesNotMatch(block, /dashboard-staging|roadmap-staging|feedlog-staging|feedlog_staging/)
+})
