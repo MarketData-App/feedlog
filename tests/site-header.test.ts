@@ -180,6 +180,7 @@ test('production settings: production aMember, no staging-only switches, no chan
   const block = wrangler.slice(start)
   assert.match(block, /^name = "feedlog-production"$/m)
   assert.match(block, /^workers_dev = false$/m)
+  assert.match(block, /^placement = \{ mode = "targeted", region = "aws:us-east-1" \}$/m, 'production runs next to the database')
   assert.match(block, /pattern = "roadmap\.marketdata\.app\/\*"/)
   assert.match(block, /^BETTER_AUTH_URL = "https:\/\/roadmap\.marketdata\.app"$/m)
   assert.match(block, /^NUXT_PUBLIC_SSO_LOGIN_URL = "https:\/\/dashboard\.marketdata\.app\/marketdata\/misc\/feedlog-sso"$/m)
