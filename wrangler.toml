@@ -113,6 +113,17 @@ bucket_name = "feedlog-staging"
 [env.staging.triggers]
 crons = ["0 3 * * *"]
 
+# Workers Logs on (selden, 2026-11-02). The feedback repo's tools/monitor/board_activity.py
+# reads the failed sign-ins, the sent emails and the error lines from them
+# (docs/runbooks/monitoring.md there).
+[env.staging.observability]
+enabled = true
+head_sampling_rate = 1
+
+[env.staging.observability.logs]
+enabled = true
+invocation_logs = true
+
 [env.staging.vars]
 BETTER_AUTH_URL = "https://roadmap-staging.marketdata.app"
 EMAIL_FROM = "Market Data Roadmap <roadmap@contact.marketdata.app>"
@@ -169,6 +180,17 @@ bucket_name = "feedlog-production"
 
 [env.production.triggers]
 crons = ["0 3 * * *"]
+
+# Workers Logs on (selden, 2026-11-02). The feedback repo's tools/monitor/board_activity.py
+# reads the failed sign-ins, the sent emails and the error lines from them
+# (docs/runbooks/monitoring.md there).
+[env.production.observability]
+enabled = true
+head_sampling_rate = 1
+
+[env.production.observability.logs]
+enabled = true
+invocation_logs = true
 
 # Not set here, on purpose: AUTH_EMAIL_VERIFY (verification stays on),
 # EMAIL_ALLOWED_DOMAINS (status emails go to every customer), NOINDEX, and

@@ -188,3 +188,11 @@ test('production settings: production aMember, no staging-only switches, no chan
     assert.doesNotMatch(block, new RegExp(`^${key}\\s*=`, 'm'), `${key} is not set on production`)
   assert.doesNotMatch(block, /dashboard-staging|roadmap-staging|feedlog-staging|feedlog_staging/)
 })
+
+test('Workers Logs are on for production and staging (the monitoring reads them)', () => {
+  const wrangler = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8')
+  for (const env of ['staging', 'production']) {
+    assert.match(wrangler, new RegExp(`^\\[env\\.${env}\\.observability\\]\\nenabled = true\\nhead_sampling_rate = 1$`, 'm'), env)
+    assert.match(wrangler, new RegExp(`^\\[env\\.${env}\\.observability\\.logs\\]\\nenabled = true\\ninvocation_logs = true$`, 'm'), env)
+  }
+})
