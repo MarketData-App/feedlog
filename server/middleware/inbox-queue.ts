@@ -1,13 +1,17 @@
 import { defineEventHandler, getHeader, toWebRequest } from 'h3'
-import { consumeBackground, INBOX_TOPIC } from '../lib/inbox/platform'
 import type { WakeMessage } from '../lib/inbox/scheduler'
 
 // Nitro bundles Vercel routes into one function. Queue triggers target that
 // function, so dispatch the CloudEvent before ordinary path-based routing.
+// MarketData: the inbox code loads here, on first use, not at Worker startup
+// (see server/plugins/zz-inbox-scheduler.ts).
 export default defineEventHandler(async event => {
   if (import.meta.preset !== 'vercel' && process.env.VERCEL !== '1') return
   if (getHeader(event, 'ce-type') !== 'com.vercel.queue.v2beta') return
-  const { handleCallback } = await import('@vercel/queue')
+  const [{ handleCallback }, { consumeBackground, INBOX_TOPIC }] = await Promise.all([
+    import('@vercel/queue'),
+    import('../lib/inbox/platform'),
+  ])
   const handler = handleCallback<WakeMessage>(async (message, metadata) => {
     if (metadata.topicName !== INBOX_TOPIC) throw new Error('Unexpected queue topic')
     await consumeBackground({}, message)
