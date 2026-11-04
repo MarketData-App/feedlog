@@ -31,7 +31,9 @@ const { isOpen: showLoginModal } = useLoginModal()
 
 // MarketData: the public pages wear the marketdata.app site header (the shared
 // kit, @marketdataapp/ui), so the board reads as a part of the website. Its
-// links all lead to www; the board's own navigation is the BoardBar below it.
+// links lead to www, except the Products menu's Updates links, which lead to
+// this board and, given currentOrigin, stay in the tab. The board's own
+// navigation is the BoardBar below it.
 const config = useRuntimeConfig().public
 const route = useRoute()
 const requestUrl = useRequestURL()
@@ -44,10 +46,12 @@ const websiteUrl = String(config.websiteUrl || 'https://www.marketdata.app').rep
 // Rendered once per layout instance, on the server and identically during
 // hydration (no hash: the server never sees one). Never re-render it: a new
 // string would replace the header's DOM under the listeners initHeader binds,
-// and under the account control. No board path matches a www link, so the
-// path at setup time marks nothing that a later one would not.
+// and under the account control. Every header link is absolute, and the kit
+// marks only a path as the current page, so the path at setup time marks
+// nothing that a later one would not.
 const headerHtml = siteHeaderHtml({
   currentPath: route.path,
+  currentOrigin: requestUrl.origin,
   websiteOrigin: websiteUrl,
   loginUrl: buildLoginHref(String(config.amemberLoginUrl), `${requestUrl.origin}${requestUrl.pathname}${requestUrl.search}`),
   signupUrl: `${websiteUrl}/signup/`,

@@ -62,8 +62,11 @@ test('absolutizeNavigation leaves the shared input untouched', () => {
   assert.equal(nav[0]!.type === 'link' && nav[0]!.href, '/pricing/')
 })
 
+const BOARD = 'https://roadmap.marketdata.app'
+
 const html = siteHeaderHtml({
   currentPath: '/p/some-post',
+  currentOrigin: BOARD,
   websiteOrigin: WWW,
   loginUrl: 'https://dashboard-staging.marketdata.app/marketdata/login?amember_redirect_url=https%3A%2F%2Froadmap-staging.marketdata.app%2F',
   signupUrl: `${WWW}/signup/`,
@@ -82,6 +85,51 @@ test('siteHeaderHtml has no board-relative link', () => {
   assert.match(html, /href="https:\/\/www\.marketdata\.app\/api\/"/)
   assert.match(html, /href="https:\/\/www\.marketdata\.app\/signup\/"/)
   assert.match(html, /href="https:\/\/dashboard-staging\.marketdata\.app\/marketdata\/login\?amember_redirect_url=/)
+})
+
+// The attributes of every header link whose text ends with `label`: the
+// mega menu's Updates column and the drawer's accordion each carry one.
+function linksLabelled(header: string, label: string): string[] {
+  return [...header.matchAll(/<a\b([^>]*)>((?:(?!<\/a>)[\s\S])*)<\/a>/g)]
+    .filter(m => m[2]!.endsWith(label))
+    .map(m => m[1]!)
+}
+
+const UPDATES = [
+  ['Changelog', `${BOARD}/changelog`],
+  ['Product Roadmap', `${BOARD}/roadmap`],
+  ['Feature Requests', `${BOARD}/`],
+] as const
+
+test('siteHeaderHtml: the Updates links open the board\'s own pages in the same tab', () => {
+  for (const [label, href] of UPDATES) {
+    const links = linksLabelled(html, label)
+    assert.equal(links.length, 2, label)
+    for (const a of links) {
+      assert.ok(a.startsWith(` href="${href}"`), label)
+      assert.doesNotMatch(a, /target=/, label)
+    }
+  }
+  // Links that leave the board keep their new tab.
+  for (const a of linksLabelled(html, 'Swagger')) assert.match(a, /target="_blank" rel="noopener noreferrer"/)
+})
+
+test('siteHeaderHtml: on staging the Updates links lead to production, in a new tab', () => {
+  const staging = siteHeaderHtml({
+    currentPath: '/',
+    currentOrigin: 'https://roadmap-staging.marketdata.app',
+    websiteOrigin: WWW,
+    loginUrl: `${WWW}/login/`,
+    signupUrl: `${WWW}/signup/`,
+  })
+  for (const [label, href] of UPDATES) {
+    const links = linksLabelled(staging, label)
+    assert.equal(links.length, 2, label)
+    for (const a of links) {
+      assert.ok(a.startsWith(` href="${href}"`), label)
+      assert.match(a, /target="_blank" rel="noopener noreferrer"/, label)
+    }
+  }
 })
 
 test('siteHeaderHtml uses the board-hosted logo files', () => {

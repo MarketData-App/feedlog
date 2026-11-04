@@ -46,6 +46,8 @@ export const ACCOUNT_SLOT = '<div id="user-profile" class="user-profile-containe
 
 export interface SiteHeaderOptions {
   currentPath: string
+  /** The board's own origin (the request's). The kit opens its links to this origin in the same tab. */
+  currentOrigin: string
   websiteOrigin: string
   /** The drawer's fallback "Log In" link. Absolute. */
   loginUrl: string
@@ -57,6 +59,7 @@ export function siteHeaderHtml(opts: SiteHeaderOptions): string {
   const origin = opts.websiteOrigin.replace(/\/+$/, '')
   return renderHeader({
     currentPath: opts.currentPath,
+    currentOrigin: opts.currentOrigin,
     navigation: absolutizeNavigation(defaultNavigation, origin),
     homeHref: `${origin}/`,
     loginUrl: opts.loginUrl,
